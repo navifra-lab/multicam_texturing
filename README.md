@@ -10,12 +10,14 @@
     <img src="./config/doc/device-hand-2.png" alt="drawing" width="200"/>
     <img src="./config/doc/device-hand.png" alt="drawing" width="200"/>
     <img src="./config/doc/device-jackal.png" alt="drawing" width="200"/>
-    <img src="./config/doc/device-livox-horizon.png" alt="drawing" width="200"/>
+    <img src="./config/doc/device-boat.png" alt="drawing" width="200"/>
 </p>
 
 ## Menu
 
   - [**System architecture**](#system-architecture)
+
+  - [**Notes on ROS2 branch**](#notes-on-ros2-branch)
 
   - [**Package dependency**](#dependency)
 
@@ -51,19 +53,34 @@ We design a system that maintains two graphs and runs up to 10x faster than real
   - The factor graph in "mapOptimization.cpp" optimizes lidar odometry factor and GPS factor. This factor graph is maintained consistently throughout the whole test.
   - The factor graph in "imuPreintegration.cpp" optimizes IMU and lidar odometry factor and estimates IMU bias. This factor graph is reset periodically and guarantees real-time odometry estimation at IMU frequency.
 
-## Dependency
+## Notes on ROS2 branch
 
-This is the original ROS1 implementation of LIO-SAM. For a ROS2 implementation see branch `ros2`.
+There are some features of the original ROS1 version that are currently missing in this ROS2 version, namely:
+- Testing with Velodyne & Livox lidars and Microstrain IMUs
+- A launch file for the navsat module/GPS factor
+- The rviz2 configuration misses many elements
 
-- [ROS](http://wiki.ros.org/ROS/Installation) (tested with Kinetic and Melodic. Refer to [#206](https://github.com/TixiaoShan/LIO-SAM/issues/206) for Noetic)
+This branch was tested with Ouster lidars, Xsens IMUs and SBG-Systems IMUs using the following ROS2 drivers:
+- [ros2_ouster_drivers](https://github.com/ros-drivers/ros2_ouster_drivers)
+- [bluespace_ai_xsens_ros_mti_driver](https://github.com/bluespace-ai/bluespace_ai_xsens_ros_mti_driver)
+- [sbg_ros2_driver](https://github.com/SBG-Systems/sbg_ros2_driver)
+
+In these tests, the IMU was mounted on the bottom of the lidar such that their x-axes pointed in the same direction. The parameters `extrinsicRot` and `extrinsicRPY` in `params.yaml` correspond to this constellation.
+
+## Dependencies
+
+Tested with ROS2 versions foxy and galactic on Ubuntu 20.04 and humble on Ubuntu 22.04
+- [ROS2](https://docs.ros.org/en/humble/Installation.html)
   ```
-  sudo apt-get install -y ros-kinetic-navigation
-  sudo apt-get install -y ros-kinetic-robot-localization
-  sudo apt-get install -y ros-kinetic-robot-state-publisher
+  sudo apt install ros-<ros2-version>-perception-pcl \
+		   ros-<ros2-version>-pcl-msgs \
+		   ros-<ros2-version>-vision-opencv \
+		   ros-<ros2-version>-xacro
   ```
-- [gtsam](https://gtsam.org/get_started/) (Georgia Tech Smoothing and Mapping library)
+- [gtsam](https://gtsam.org/get_started) (Georgia Tech Smoothing and Mapping library)
   ```
-  sudo add-apt-repository ppa:borglab/gtsam-release-4.0
+  # Add GTSAM-PPA
+  sudo add-apt-repository ppa:borglab/gtsam-release-4.1
   sudo apt install libgtsam-dev libgtsam-unstable-dev
   ```
 
@@ -71,33 +88,57 @@ This is the original ROS1 implementation of LIO-SAM. For a ROS2 implementation s
 
 Use the following commands to download and compile the package.
 
-```
-cd ~/catkin_ws/src
-git clone https://github.com/TixiaoShan/LIO-SAM.git
-cd ..
-catkin_make
-```
+  ```
+  cd ~/ros2_ws/src
+  git clone https://github.com/TixiaoShan/LIO-SAM.git
+  cd lio-sam
+  git checkout ros2
+  cd ..
+  colcon build
+  ```
 
 ## Using Docker
-Build image (based on ROS1 Kinetic):
 
-```bash
-docker build -t liosam-kinetic-xenial .
+Build image (based on ROS2 Humble):
+
+```
+docker build -t liosam-humble-jammy .
 ```
 
-Once you have the image, start a container as follows:
+Once you have the image, you can start a container by using one of the following methods:
 
-```bash
+1. `docker run`
+
+```
 docker run --init -it -d \
+  --name liosam-humble-jammy-container \
   -v /etc/localtime:/etc/localtime:ro \
   -v /etc/timezone:/etc/timezone:ro \
   -v /tmp/.X11-unix:/tmp/.X11-unix \
   -e DISPLAY=$DISPLAY \
-  liosam-kinetic-xenial \
+  --runtime=nvidia --gpus all \
+  liosam-humble-jammy \
   bash
 ```
 
+2. `docker compose`
 
+Start a docker compose container:
+
+```
+docker compose up -d
+```
+
+Stopping a docker compose container:
+```
+docker compose down
+```
+
+To enter into the running container use:
+
+```
+docker exec -it liosam-humble-jammy-container bash
+```
 ## Prepare lidar data
 
 The user needs to prepare the point cloud data in the correct format for cloud deskewing, which is mainly done in "imageProjection.cpp". The two requirements are:
@@ -106,11 +147,11 @@ The user needs to prepare the point cloud data in the correct format for cloud d
 
 ## Prepare IMU data
 
-  - **IMU requirement**. Like the original LOAM implementation, LIO-SAM only works with a 9-axis IMU, which gives roll, pitch, and yaw estimation. The roll and pitch estimation is mainly used to initialize the system at the correct attitude. The yaw estimation initializes the system at the right heading when using GPS data. Theoretically, an initialization procedure like VINS-Mono will enable LIO-SAM to work with a 6-axis IMU. (**New**: [liorf](https://github.com/YJZLuckyBoy/liorf) has added support for 6-axis IMU.) The performance of the system largely depends on the quality of the IMU measurements. The higher the IMU data rate, the better the system accuracy. We use Microstrain 3DM-GX5-25, which outputs data at 500Hz. We recommend using an IMU that gives at least a 200Hz output rate. Note that the internal IMU of Ouster lidar is an 6-axis IMU.
+  - **IMU requirement**. Like the original LOAM implementation, LIO-SAM only works with a 9-axis IMU, which gives roll, pitch, and yaw estimation. The roll and pitch estimation is mainly used to initialize the system at the correct attitude. The yaw estimation initializes the system at the right heading when using GPS data. Theoretically, an initialization procedure like VINS-Mono will enable LIO-SAM to work with a 6-axis IMU. The performance of the system largely depends on the quality of the IMU measurements. The higher the IMU data rate, the better the system accuracy. We use Microstrain 3DM-GX5-25, which outputs data at 500Hz. We recommend using an IMU that gives at least a 200Hz output rate. Note that the internal IMU of Ouster lidar is an 6-axis IMU.
 
-  - **IMU alignment**. LIO-SAM transforms IMU raw data from the IMU frame to the Lidar frame, which follows the ROS REP-105 convention (x - forward, y - left, z - upward). To make the system function properly, the correct extrinsic transformation needs to be provided in "params.yaml" file. **The reason why there are two extrinsics is that my IMU (Microstrain 3DM-GX5-25) acceleration and attitude have different cooridinates. Depend on your IMU manufacturer, the two extrinsics for your IMU may or may not be the same**. Using our setup as an example:
-    - we need to set the readings of x-z acceleration and gyro negative to transform the IMU data in the lidar frame, which is indicated by "extrinsicRot" in "params.yaml."
-    - The transformation of attitude readings might be slightly different. IMU's attitude measurement `q_wb` usually means the rotation of points in the IMU coordinate system to the world coordinate system (e.g. ENU). However, the algorithm requires `q_wl`, the rotation from lidar to world. So we need a rotation from lidar to IMU `q_bl`, where `q_wl = q_wb * q_bl`. For convenience, the user only needs to provide `q_lb` as "extrinsicRPY" in "params.yaml" (same as the "extrinsicRot" if acceleration and attitude have the same coordinate).
+  - **IMU alignment**. LIO-SAM transforms IMU raw data from the IMU frame to the Lidar frame, which follows the ROS REP-105 convention (x - forward, y - left, z - upward). To make the system function properly, the correct extrinsic transformation needs to be provided in "params.yaml" file. **The reason why there are two extrinsics is that my IMU (Microstrain 3DM-GX5-25) acceleration and attitude have different coordinates. Depending on your IMU manufacturer, the two extrinsics for your IMU may or may not be the same**.
+    - "extrinsicRot" in "params.yaml" is a rotation matrix that transforms IMU gyro and acceleometer measurements to lidar frame.
+    - "extrinsicRPY" in "params.yaml" is a rotation matrix that transforms IMU orientation to lidar frame.
 
   - **IMU debug**. It's strongly recommended that the user uncomment the debug lines in "imuHandler()" of "imageProjection.cpp" and test the output of the transformed IMU data. The user can rotate the sensor suite to check whether the readings correspond to the sensor's movement. A YouTube video that shows the corrected IMU data can be found [here (link to YouTube)](https://youtu.be/BOUK8LYQhHs).
 
@@ -124,39 +165,29 @@ The user needs to prepare the point cloud data in the correct format for cloud d
 
 ## Sample datasets
 
-  * Download some sample datasets to test the functionality of the package. The datasets below are configured to run using the default settings:
-    - **Walking dataset:** [[Google Drive](https://drive.google.com/drive/folders/1gJHwfdHCRdjP7vuT556pv8atqrCJPbUq?usp=sharing)]
-    - **Park dataset:** [[Google Drive](https://drive.google.com/drive/folders/1gJHwfdHCRdjP7vuT556pv8atqrCJPbUq?usp=sharing)]
-    - **Garden dataset:** [[Google Drive](https://drive.google.com/drive/folders/1gJHwfdHCRdjP7vuT556pv8atqrCJPbUq?usp=sharing)]
+For privacy reasons, no data set can currently be made available for ROS2.
 
-  * The datasets below need the parameters to be configured. In these datasets, the point cloud topic is "points_raw." The IMU topic is "imu_correct," which gives the IMU data in ROS REP105 standard. Because no IMU transformation is needed for this dataset, the following configurations need to be changed to run this dataset successfully:
-    - The "imuTopic" parameter in "config/params.yaml" needs to be set to "imu_correct".
-    - The "extrinsicRot" and "extrinsicRPY" in "config/params.yaml" needs to be set as identity matrices.
-      - **Rotation dataset:** [[Google Drive](https://drive.google.com/drive/folders/1gJHwfdHCRdjP7vuT556pv8atqrCJPbUq?usp=sharing)]
-      - **Campus dataset (large):** [[Google Drive](https://drive.google.com/drive/folders/1gJHwfdHCRdjP7vuT556pv8atqrCJPbUq?usp=sharing)]
-      - **Campus dataset (small):** [[Google Drive](https://drive.google.com/drive/folders/1gJHwfdHCRdjP7vuT556pv8atqrCJPbUq?usp=sharing)]
-
-  * Ouster (OS1-128) dataset. No extrinsics need to be changed for this dataset if you are using the default settings. Please follow the Ouster notes below to configure the package to run with Ouster data. A video of the dataset can be found on [YouTube](https://youtu.be/O7fKgZQzkEo):
-    - **Rooftop dataset:** [[Google Drive](https://drive.google.com/drive/folders/1gJHwfdHCRdjP7vuT556pv8atqrCJPbUq?usp=sharing)]
-
-  * Livox Horizon dataset. Please refer to the following notes section for paramater changes.
-    - **Livox Horizon:** [[Google Drive](https://drive.google.com/drive/folders/1gJHwfdHCRdjP7vuT556pv8atqrCJPbUq?usp=sharing)]
-
-  * KITTI dataset. The extrinsics can be found in the Notes KITTI section below. To generate more bags using other KITTI raw data, you can use the python script provided in "config/doc/kitti2bag".
-    - **2011_09_30_drive_0028:** [[Google Drive](https://drive.google.com/drive/folders/1gJHwfdHCRdjP7vuT556pv8atqrCJPbUq?usp=sharing)]
+README.md of the master branch contains some links to ROS1 rosbags. It is possible to use [ros1_bridge](https://github.com/ros2/ros1_bridge) with these rosbags, but verify timing behavior (message frequency in ROS2) first. Mind [DDS tuning](https://docs.ros.org/en/humble/How-To-Guides/DDS-tuning.html).
 
 ## Run the package
 
 1. Run the launch file:
 ```
-roslaunch lio_sam run.launch
+ros2 launch lio_sam run.launch.py
 ```
 
 2. Play existing bag files:
 ```
-rosbag play your-bag.bag -r 3
+ros2 bag play your-bag.bag
 ```
 
+## Save map
+```
+ros2 service call /lio_sam/save_map lio_sam/srv/SaveMap
+```
+```
+ros2 service call /lio_sam/save_map lio_sam/srv/SaveMap "{resolution: 0.2, destination: /Downloads/service_LOAM}"
+```
 ## Other notes
 
   - **Loop closure:** The loop function here gives an example of proof of concept. It is directly adapted from LeGO-LOAM loop closure. For more advanced loop closure implementation, please refer to [ScanContext](https://github.com/irapkaist/SC-LeGO-LOAM). Set the "loopClosureEnableFlag" in "params.yaml" to "true" to test the loop closure function. In Rviz, uncheck "Map (cloud)" and check "Map (global)". This is because the visualized map - "Map (cloud)" - is simply a stack of point clouds in Rviz. Their postion will not be updated after pose correction. The loop closure function here is simply adapted from LeGO-LOAM, which is an ICP-based method. Because ICP runs pretty slow, it is suggested that the playback speed is set to be "-r 1". You can try the Garden dataset for testing.
@@ -185,7 +216,7 @@ rosbag play your-bag.bag -r 3
     <img src="./config/doc/kitti-demo.gif" alt="drawing" width="300"/>
 </p>
 
-  - **Ouster lidar:** To make LIO-SAM work with Ouster lidar, some preparations need to be done on hardware and software level.
+  - **Ouster lidar:** To make LIO-SAM work with Ouster lidar, some preparations needs to be done on hardware and software level.
     - Hardware:
       - Use an external IMU. LIO-SAM does not work with the internal 6-axis IMU of Ouster lidar. You need to attach a 9-axis IMU to the lidar and perform data-gathering.
       - Configure the driver. Change "timestamp_mode" in your Ouster launch file to "TIME_FROM_PTP_1588" so you can have ROS format timestamp for the point clouds.
@@ -199,28 +230,6 @@ rosbag play your-bag.bag -r 3
     <img src="./config/doc/ouster-device.jpg" alt="drawing" width="300"/>
     <img src="./config/doc/ouster-demo.gif" alt="drawing" width="300"/>
 </p>
-
-  - **Livox Horizon lidar:** Please note that solid-state lidar hasn't been extensively tested with LIO-SAM yet. An external IMU is also used here rather than the internal one. The support for such lidars is based on minimal change of the codebase from mechanical lidars. A customized [livox_ros_driver](https://github.com/TixiaoShan/livox_ros_driver) needs to be used to publish point cloud format that can be processed by LIO-SAM. Other SLAM solutions may offer better implementations. More studies and suggestions are welcome. Please change the following parameters to make LIO-SAM work with Livox Horizon lidar:
-    - sensor: livox
-    - N_SCAN: 6
-    - Horizon_SCAN: 4000
-    - edgeFeatureMinValidNum: 1
-    - Use [livox_ros_driver](https://github.com/TixiaoShan/livox_ros_driver) for data recording
-
-<p align='center'>
-    <img src="./config/doc/livox-demo.gif" alt="drawing" width="600"/>
-</p>
-
-## Service
-  - /lio_sam/save_map
-    - save map as a PCD file.
-      ``` bash
-        rosservice call [service] [resolution] [destination]
-      ```
-      - Example:
-      ``` bash
-        $ rosservice call /lio_sam/save_map 0.2 "/Downloads/LOAM/"
-      ```
 
 ## Issues
 
@@ -264,10 +273,8 @@ Part of the code is adapted from [LeGO-LOAM](https://github.com/RobustFieldAuton
 
 ## Related Package
 
-  - [liorf](https://github.com/YJZLuckyBoy/liorf) LIO-SAM with 6-axis IMU and more lidar support.
   - [Lidar-IMU calibration](https://github.com/chennuo0125-HIT/lidar_imu_calib)
   - [LIO-SAM with Scan Context](https://github.com/gisbi-kim/SC-LIO-SAM)
-  - [LIO-SAM with 6-axis IMU](https://github.com/JokerJohn/LIO_SAM_6AXIS)
 
 ## Acknowledgement
 
