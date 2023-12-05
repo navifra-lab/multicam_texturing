@@ -9,7 +9,7 @@
 ## System architecture
 
 <p align='center'>
-    <img src="./config/doc/system.png" alt="drawing" width="800"/>
+    <img src="./config/doc/system1.png" alt="drawing" width="800"/>
 </p>
 
 Unlike the original [LIO-SAM](https://github.com/TixiaoShan/LIO-SAM), it takes a dynamic number of camera data as input, and it creates colorful maps.
