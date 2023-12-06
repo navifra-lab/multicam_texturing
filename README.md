@@ -26,6 +26,10 @@ To create color maps with LIO-SAM, there is need for ROS2 bag file and ROS2 bag 
 - `sensor_msgs/msg/Image`
 - `sensor_msgs/msg/CameraInfo`
 
+Example data can be found [here](https://drive.google.com/drive/folders/1ANjfLjzSpRAHbbkzIy4bqnG_DY6IPy_T?usp=drive_link)
+
+- You can find calibration values for example data [here](https://github.com/leo-drive/robione_sensor_kit_launch/blob/RobiOne/robione_sensor_kit_description/config/sensor_kit_calibration.yaml)
+
 ## Usage
 
 ### 1. Clone and build the package
