@@ -2,13 +2,13 @@
   ros__parameters:
 
     # Topics
-    pointCloudTopic: "/sensing/lidar/top/pointcloud_raw"          # Point cloud data
-    imuTopic: "/sensing/gnss/clap/ros/imu"                        # IMU data
+    pointCloudTopic: "/hrz/points"          # Point cloud data
+    imuTopic: "/imu/data"                        # IMU data
     odomTopic: "/odometry/imu"                                    # IMU pre-preintegration odometry, same frequency as IMU
     gpsTopic: "/sensing/gnss/clap/ros/odometry"                   # GPS odometry topic from navsat, see module_navsat.launch file
 
     # Frames
-    lidarFrame: "rs_helios_top"
+    lidarFrame: "hrz/os_sensor"
     baselinkFrame: "base_link"
     odometryFrame: "odom"
     mapFrame: "map"
@@ -20,34 +20,38 @@
     poseCovThreshold: 0.01                       # m^2, threshold for using GPS data
 
     # Export settings
-    savePCD: false                               # https://github.com/TixiaoShan/LIO-SAM/issues/3
-    savePCDDirectory: "/Downloads/LOAM/"         # in your home folder, starts and ends with "/". Warning: the code deletes "LOAM" folder then recreates it. See "mapOptimization" for implementation
+    savePCD: true                               # https://github.com/TixiaoShan/LIO-SAM/issues/3
+    savePCDDirectory: "/dataset/multi/2025-06-19-18-31-44/2025-06-19-18-31-44_after.db3/map/"         # in your home folder, starts and ends with "/". Warning: the code deletes "LOAM" folder then recreates it. See "mapOptimization" for implementation
 
     # Sensor Settings
-    sensor: velodyne                              # lidar sensor type, either 'velodyne', 'ouster' or 'livox'
+    sensor: ouster                              # lidar sensor type, either 'velodyne', 'ouster' or 'livox'
     N_SCAN: 32                                    # number of lidar channels (i.e., Velodyne/Ouster: 16, 32, 64, 128, Livox Horizon: 6)
-    Horizon_SCAN: 1800                            # lidar horizontal resolution (Velodyne:1800, Ouster:512,1024,2048, Livox Horizon: 4000)
+    Horizon_SCAN: 1024                            # lidar horizontal resolution (Velodyne:1800, Ouster:512,1024,2048, Livox Horizon: 4000)
     downsampleRate: 1                             # default: 1. Downsample your data if too many
     # points. i.e., 16 = 64 / 4, 16 = 16 / 1
-    lidarMinRange: 2.0                           # default: 1.0, minimum lidar range to be used
+    lidarMinRange: 0.5                          # default: 1.0, minimum lidar range to be used
     lidarMaxRange: 60.0                       # default: 1000.0, maximum lidar range to be used
 
     # IMU Settings
-    imuAccNoise: 3.9939570888238808e-02
-    imuGyrNoise: 1.5636343949698187e-02
-    imuAccBiasN: 6.4356659353532566e-04
-    imuGyrBiasN: 3.5640318696367613e-04
+    # imuAccNoise: 3.9939570888238808e-02
+    # imuGyrNoise: 1.5636343949698187e-02
+    # imuAccBiasN: 6.4356659353532566e-04
+    # imuGyrBiasN: 3.5640318696367613e-04
+    imuAccNoise: 0.000376012523782261
+    imuGyrNoise: 7.190833874000857e-05
+    imuAccBiasN: 3.0401058897900536e-05
+    imuGyrBiasN: 5.17994789344046e-07
 
     imuGravity: 9.81
     imuRPYWeight: 0.01
 
-    extrinsicTrans:  [ 0.0,  0.0,  0.08 ]
-    extrinsicRot: [ 1.0000000, 0.0000000,  0.0000000,
-                    0.0000000, 1.0000000,  0.0000000,
-                    0.0000000, 0.0000000,  1.0000000 ]
-    extrinsicRPY: [ 1.0000000, 0.0000000,  0.0000000,
-                        0.0000000, 1.0000000,  0.0000000,
-                        0.0000000, 0.0000000,  1.0000000 ]
+    extrinsicTrans:  [ -0.00845, -0.00004, -0.09992 ]
+    extrinsicRot: [ -1.0, 0.0,  0.0,
+                    0.0, 1.0,  0.0,
+                    0.0, 0.0,  -1.0 ]
+    extrinsicRPY: [ 0.0, -1.0,  0.0,
+                        1.0, 0.0,  0.0,
+                        0.0, 0.0,  1.0 ]
 
     # LOAM feature threshold
     edgeThreshold: 1.0
@@ -56,9 +60,9 @@
     surfFeatureMinValidNum: 100
 
     # voxel filter paprams
-    odometrySurfLeafSize: 0.4                     # default: 0.4 - outdoor, 0.2 - indoor
-    mappingCornerLeafSize: 0.2                    # default: 0.2 - outdoor, 0.1 - indoor
-    mappingSurfLeafSize: 0.4                      # default: 0.4 - outdoor, 0.2 - indoor
+    odometrySurfLeafSize: 0.05                     # default: 0.4 - outdoor, 0.2 - indoor
+    mappingCornerLeafSize: 0.025                    # default: 0.2 - outdoor, 0.1 - indoor
+    mappingSurfLeafSize: 0.05                      # default: 0.4 - outdoor, 0.2 - indoor
 
     # robot motion constraint (in case you are using a 2D robot)
     z_tollerance: 1000.0                          # meters
@@ -79,7 +83,7 @@
     loopClosureEnableFlag: true
     loopClosureFrequency: 1.0                     # Hz, regulate loop closure constraint add frequency
     surroundingKeyframeSize: 50                   # submap size (when loop closure enabled)
-    historyKeyframeSearchRadius: 15.0             # meters, key frame that is within n meters from
+    historyKeyframeSearchRadius: 5.0  #15.0       # meters, key frame that is within n meters from
     # current pose will be considerd for loop closure
     historyKeyframeSearchTimeDiff: 30.0           # seconds, key frame that is n seconds older will be
     # considered for loop closure
@@ -93,6 +97,6 @@
     globalMapVisualizationLeafSize: 0.4           # meters, global map visualization cloud density
 
     #Color Cloud
-    cameraTopics: ["/sensing/camera/camera0/", "/sensing/camera/camera1/", "/sensing/camera/camera2/", "/sensing/camera/camera3/"]
-    imageTopicLastName: "image_raw"
+    cameraTopics: ["/camera_0/","/camera_1/","/camera_2/"]
+    imageTopicLastName: "image_rect"
     cameraInfoTopicLastName: "camera_info"

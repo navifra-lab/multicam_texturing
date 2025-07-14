@@ -93,6 +93,38 @@ def generate_launch_description():
             arguments=['-d', rviz_config_file],
             output='screen'
         ),
+
+        # Node(
+        #     package='tf2_ros',
+        #     executable='static_transform_publisher',
+        #     name='static_tf_cam0',
+        #     arguments=['0.0', '-0.199', '-0.174606', '1.3089969', '0.0226893', '0',
+        #                'hrz/os_sensor', 'camera_0_frame'],
+        #     output='screen'
+        # ),
+        # Node(
+        #     package='tf2_ros',
+        #     executable='static_transform_publisher',
+        #     name='static_tf_cam2',
+        #     arguments=['0.0', '-0.17', '-0.22', '0', '1.5323994', '-1.5707963',
+        #                'hrz/os_sensor', 'camera_2_frame'],
+        #     output='screen'
+        # ),
+        # Node(
+        #     package='tf2_ros',
+        #     executable='static_transform_publisher',
+        #     name='static_tf_cam1',
+        #     arguments=['0.0', '-0.155', '-0.22', '-1.5446164', '-0.0226893', '3.1241394',
+        #                'hrz/os_sensor', 'camera_1_frame'],
+        #     output='screen'
+        # ),
+        # Node(
+        #     package='tf2_ros',
+        #     executable='static_transform_publisher',
+        #     name='static_tf_base_to_lidar',
+        #     arguments=['0', '0', '0', '0', '0', '0', 'base_link', 'hrz/os_sensor'],
+        #     output='screen'
+        # ),
         # Node(
         #     package='tf2_ros',
         #     executable='static_transform_publisher',

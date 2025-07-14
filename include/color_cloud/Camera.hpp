@@ -77,9 +77,13 @@ namespace color_point_cloud {
             image_height_ = msg->height;
 
             camera_matrix_(0, 0) = msg->k[0];
+            camera_matrix_(0, 1) = 0;
             camera_matrix_(0, 2) = msg->k[2];
+            camera_matrix_(1, 0) = 0;
             camera_matrix_(1, 1) = msg->k[4];
             camera_matrix_(1, 2) = msg->k[5];
+            camera_matrix_(2, 0) = 0;
+            camera_matrix_(2, 1) = 0;
             camera_matrix_(2, 2) = 1;
 
             camera_matrix_cv_ = (cv::Mat_<double>(3, 3)
@@ -96,10 +100,17 @@ namespace color_point_cloud {
             rectification_matrix_(2, 2) = msg->r[8];
 
             projection_matrix_(0, 0) = msg->p[0];
+            projection_matrix_(0, 1) = 0;
             projection_matrix_(0, 2) = msg->p[2];
+            projection_matrix_(0, 3) = 0;
+            projection_matrix_(1, 0) = 0;
             projection_matrix_(1, 1) = msg->p[5];
             projection_matrix_(1, 2) = msg->p[6];
+            projection_matrix_(1, 3) = 0;
+            projection_matrix_(2, 0) = 0;
+            projection_matrix_(2, 1) = 0;
             projection_matrix_(2, 2) = 1;
+            projection_matrix_(2, 3) = 0;
 
             distortion_matrix_(0, 0) = msg->d[0];
             distortion_matrix_(0, 1) = msg->d[1];
@@ -122,7 +133,9 @@ namespace color_point_cloud {
         }
 
         void set_lidar_to_camera_projection_matrix() {
-            lidar_to_camera_projection_matrix_ = projection_matrix_ * lidar_to_camera_matrix_.block<4, 4>(0, 0);
+            // lidar_to_camera_projection_matrix_ = projection_matrix_ * lidar_to_camera_matrix_.block<4, 4>(0, 0);
+            Eigen::Matrix4d lidar_to_camera_matrix_inv = lidar_to_camera_matrix_.inverse();
+            lidar_to_camera_projection_matrix_ = projection_matrix_ * lidar_to_camera_matrix_inv.block<4, 4>(0, 0);
         }
 
         std::string get_image_topic() {

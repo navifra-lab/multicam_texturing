@@ -19,7 +19,7 @@ struct OusterPointXYZIRT {
     float intensity;
     uint32_t t;
     uint16_t reflectivity;
-    uint8_t ring;
+    uint16_t ring;
     uint16_t noise;
     uint32_t range;
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -27,7 +27,7 @@ struct OusterPointXYZIRT {
 POINT_CLOUD_REGISTER_POINT_STRUCT(OusterPointXYZIRT,
     (float, x, x) (float, y, y) (float, z, z) (float, intensity, intensity)
     (uint32_t, t, t) (uint16_t, reflectivity, reflectivity)
-    (uint8_t, ring, ring) (uint16_t, noise, noise) (uint32_t, range, range)
+    (uint16_t, ring, ring) (uint16_t, noise, noise) (uint32_t, range, range)
 )
 
 // Use the Velodyne point format as a common representation

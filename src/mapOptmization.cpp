@@ -30,6 +30,12 @@ using symbol_shorthand::V; // Vel   (xdot,ydot,zdot)
 using symbol_shorthand::B; // Bias  (ax,ay,az,gx,gy,gz)
 using symbol_shorthand::G; // GPS pose
 
+//TODO Delete
+static double max_time_diff = 0.0;
+static double min_time_diff = std::numeric_limits<double>::max();
+static double total_time_diff = 0.0;
+static size_t time_diff_count = 0;
+
 /*
     * A point cloud type that has 6D pose info ([x,y,z,roll,pitch,yaw] intensity is time stamp)
     */
@@ -225,12 +231,12 @@ public:
             string saveMapDirectory;
             cout << "****************************************************" << endl;
             cout << "Saving map to pcd files ..." << endl;
-            if(req->destination.empty()) saveMapDirectory = std::getenv("HOME") + savePCDDirectory;
-            else saveMapDirectory = std::getenv("HOME") + req->destination;
+            if(req->destination.empty()) saveMapDirectory = savePCDDirectory;
+            else saveMapDirectory = req->destination;
             cout << "Save destination: " << saveMapDirectory << endl;
             // create directory and remove old files;
-            int unused = system((std::string("exec rm -r ") + saveMapDirectory).c_str());
-            unused = system((std::string("mkdir -p ") + saveMapDirectory).c_str());
+            // int unused = system((std::string("exec rm -r ") + saveMapDirectory).c_str());
+            // unused = system((std::string("mkdir -p ") + saveMapDirectory).c_str());
             // save key frame transformations
             pcl::io::savePCDFileBinary(saveMapDirectory + "/trajectory.pcd", *cloudKeyPoses3D);
             pcl::io::savePCDFileBinary(saveMapDirectory + "/transformations.pcd", *cloudKeyPoses6D);
@@ -403,7 +409,33 @@ public:
                               return;
                           }
 
+
+                          //TODO Delete
+                        //   rclcpp::Time lidar_time(msgIn->cloud_corner.header.stamp);
+                        //   rclcpp::Time image_time(pair.second->get_image_msg()->header.stamp);
+                        //   double time_diff = std::fabs((lidar_time - image_time).seconds());
+                        //   if (time_diff > 0.2)
+                        //   {
+                        //       RCLCPP_WARN(this->get_logger(),
+                        //                   "[%s] Skip colorize: time diff = %.6f > 0.2",
+                        //                   pair.first.c_str(), time_diff);                              
+                        //       //   max_time_diff = std::max(max_time_diff, time_diff);
+                        //       //   min_time_diff = std::min(min_time_diff, time_diff);
+                        //       //   total_time_diff += time_diff;
+                        //       //   ++time_diff_count;
+                        //       //   double avg_time_diff = total_time_diff / time_diff_count;
+                        //       //   RCLCPP_INFO(this->get_logger(),
+                        //       //               "[Time Diff] Current: %.6f s | Avg: %.6f s | Max: %.6f s | Min: %.6f s",
+                        //       //               time_diff, avg_time_diff, max_time_diff, min_time_diff);                              
+                        //   }
+
                           pair.second->set_cv_image(pair.second->get_image_msg());
+                          const auto &image = pair.second->get_cv_image();
+                          if (image.type() != CV_8UC3)
+                          {
+                              RCLCPP_WARN(this->get_logger(), "Image type is not CV_8UC3. Got: %d", image.type());
+                              return;
+                          }
 
                           color_point_cloud::PointCloudConst cloud_corner{msgIn->cloud_corner};
 
@@ -424,44 +456,68 @@ public:
                               double x = point2d_transformed_camera[0];
                               double y = point2d_transformed_camera[1];
 
-                              if (x < 0 || x > pair.second->get_image_width() || y < 0 ||
-                                  y > pair.second->get_image_height() ||
-                                  point3d_transformed_camera[2] < 0) {
-                                  // TODO: If you give 0 to r, g, b, it will be more matt when you visualize on CloudCompare.
-                                  // pointRGB.x = point.x;
-                                  // pointRGB.y = point.y;
-                                  // pointRGB.z = point.z;
-                                  // pointRGB.r = 0;
-                                  // pointRGB.g = 0;
-                                  // pointRGB.b = 0;
-                                  // pointRGB.rgb = 0;
-                              } else {
+                            //   if (point3d_transformed_camera[2] > 0 && x >= 0.5 && x < pair.second->get_image_width() - 0.5 && y >= 0.5 && y < pair.second->get_image_height() - 0.5)
+                            //   {
+                            //       cv::Mat patch;
+                            //       cv::getRectSubPix(image, cv::Size(1, 1), cv::Point2f(x, y), patch);
+                            //       if (!patch.empty())
+                            //       {
+                            //           pointRGB.x = point.x;
+                            //           pointRGB.y = point.y;
+                            //           pointRGB.z = point.z;
+                            //           cv::Vec3b color = patch.at<cv::Vec3b>(0, 0);
+                            //           if (pair.second->get_image_msg()->encoding == "bgr8")
+                            //           {
+                            //               pointRGB.r = color[2];
+                            //               pointRGB.g = color[1];
+                            //               pointRGB.b = color[0];
+                            //           }
+                            //           else
+                            //           {
+                            //               pointRGB.r = color[0];
+                            //               pointRGB.g = color[1];
+                            //               pointRGB.b = color[2];
+                            //           }
+                            //       }
+                            //   }
+                            //   else
+                            //   {
+                            //       pointRGB.x = point.x;
+                            //       pointRGB.y = point.y;
+                            //       pointRGB.z = point.z;
+                            //       pointRGB.r = 0;
+                            //       pointRGB.g = 0;
+                            //       pointRGB.b = 0;
+                            //   }
+
+                              if (x > 0 && x < pair.second->get_image_width() && y > 0 && y < pair.second->get_image_height() && point3d_transformed_camera[2] > 0)
+                              {
                                   cv::Vec3d color = pair.second->get_cv_image().at<cv::Vec3b>(cv::Point(x, y));
                                   cv::Scalar color_scalar(color[0], color[1], color[2]);
-
                                   pointRGB.x = point.x;
                                   pointRGB.y = point.y;
                                   pointRGB.z = point.z;
-
-                                  if (pair.second->get_image_msg()->encoding == "rgb8") {
-                                      pointRGB.r = color[0];
+                                  if (pair.second->get_image_msg()->encoding == "bgr8")
+                                  {
+                                      pointRGB.r = color[2];
                                       pointRGB.g = color[1];
-                                      pointRGB.b = color[2];
-                                      uint32_t rgb = (uint32_t(color[0]) << 16 | uint32_t(color[1]) << 8 |
-                                                      uint32_t(color[2]));
-                                  } else if (pair.second->get_image_msg()->encoding == "bgr8") {
-                                      pointRGB.r = color[0];
-                                      pointRGB.g = color[1];
-                                      pointRGB.b = color[2];
-                                      uint32_t rgb = (uint32_t(color[2]) << 16 | uint32_t(color[1]) << 8 |
-                                                      uint32_t(color[0]));
-                                  } else {
-                                      pointRGB.r = color[0];
-                                      pointRGB.g = color[1];
-                                      pointRGB.b = color[2];
-                                      uint32_t rgb = (uint32_t(color[0]) << 16 | uint32_t(color[1]) << 8 |
-                                                      uint32_t(color[2]));
+                                      pointRGB.b = color[0];
                                   }
+                                  else
+                                  {
+                                      pointRGB.r = color[0];
+                                      pointRGB.g = color[1];
+                                      pointRGB.b = color[2];
+                                  }
+                              }
+                              else
+                              {
+                                  pointRGB.x = point.x;
+                                  pointRGB.y = point.y;
+                                  pointRGB.z = point.z;
+                                  pointRGB.r = 0;
+                                  pointRGB.g = 0;
+                                  pointRGB.b = 0;
                               }
 
                               laserCloudCornerLast->push_back(pointRGB);
@@ -487,45 +543,70 @@ public:
                               double x = point2d_transformed_camera[0];
                               double y = point2d_transformed_camera[1];
 
-                              if (x < 0 || x > pair.second->get_image_width() || y < 0 ||
-                                  y > pair.second->get_image_height() ||
-                                  point3d_transformed_camera[2] < 0) {
-                                  // TODO: If you give 0 to r, g, b, it will be more matt when you visualize on CloudCompare.
-                                  // pointRGB.x = point.x;
-                                  // pointRGB.y = point.y;
-                                  // pointRGB.z = point.z;
-                                  // pointRGB.r = 0;
-                                  // pointRGB.g = 0;
-                                  // pointRGB.b = 0;
-                                  // pointRGB.rgb = 0;
-                              } else {
+                            //   if (point3d_transformed_camera[2] > 0 && x >= 0.5 && x < pair.second->get_image_width() - 0.5 && y >= 0.5 && y < pair.second->get_image_height() - 0.5)
+                            //   {
+                            //       cv::Mat patch;
+                            //       cv::getRectSubPix(image, cv::Size(1, 1), cv::Point2f(x, y), patch);
+                            //       if (!patch.empty())
+                            //       {
+                            //           pointRGB.x = point.x;
+                            //           pointRGB.y = point.y;
+                            //           pointRGB.z = point.z;
+                            //           cv::Vec3b color = patch.at<cv::Vec3b>(0, 0);
+                            //           if (pair.second->get_image_msg()->encoding == "bgr8")
+                            //           {
+                            //               pointRGB.r = color[2];
+                            //               pointRGB.g = color[1];
+                            //               pointRGB.b = color[0];
+                            //           }
+                            //           else
+                            //           {
+                            //               pointRGB.r = color[0];
+                            //               pointRGB.g = color[1];
+                            //               pointRGB.b = color[2];
+                            //           }
+                            //       }
+                            //   }
+                            //   else
+                            //   {
+                            //       pointRGB.x = point.x;
+                            //       pointRGB.y = point.y;
+                            //       pointRGB.z = point.z;
+                            //       pointRGB.r = 0;
+                            //       pointRGB.g = 0;
+                            //       pointRGB.b = 0;
+                            //   }
+
+                              if (x > 0 && x < pair.second->get_image_width() && y > 0 && y < pair.second->get_image_height() && point3d_transformed_camera[2] > 0)
+                              {
                                   cv::Vec3d color = pair.second->get_cv_image().at<cv::Vec3b>(cv::Point(x, y));
                                   cv::Scalar color_scalar(color[0], color[1], color[2]);
-
                                   pointRGB.x = point.x;
                                   pointRGB.y = point.y;
                                   pointRGB.z = point.z;
-
-                                  if (pair.second->get_image_msg()->encoding == "rgb8") {
+                                  if (pair.second->get_image_msg()->encoding == "bgr8")
+                                  {
+                                      pointRGB.r = color[2];
+                                      pointRGB.g = color[1];
+                                      pointRGB.b = color[0];
+                                  }
+                                  else
+                                  {
                                       pointRGB.r = color[0];
                                       pointRGB.g = color[1];
                                       pointRGB.b = color[2];
-                                      uint32_t rgb = (uint32_t(color[0]) << 16 | uint32_t(color[1]) << 8 |
-                                                      uint32_t(color[2]));
-                                  } else if (pair.second->get_image_msg()->encoding == "bgr8") {
-                                      pointRGB.r = color[0];
-                                      pointRGB.g = color[1];
-                                      pointRGB.b = color[2];
-                                      uint32_t rgb = (uint32_t(color[2]) << 16 | uint32_t(color[1]) << 8 |
-                                                      uint32_t(color[0]));
-                                  } else {
-                                      pointRGB.r = color[0];
-                                      pointRGB.g = color[1];
-                                      pointRGB.b = color[2];
-                                      uint32_t rgb = (uint32_t(color[0]) << 16 | uint32_t(color[1]) << 8 |
-                                                      uint32_t(color[2]));
                                   }
                               }
+                              else
+                              {
+                                  pointRGB.x = point.x;
+                                  pointRGB.y = point.y;
+                                  pointRGB.z = point.z;
+                                  pointRGB.r = 0;
+                                  pointRGB.g = 0;
+                                  pointRGB.b = 0;
+                              }
+
                               laserCloudSurfLast->push_back(pointRGB);
                               cloud_surface.nextPoint();
                           }
@@ -662,9 +743,9 @@ public:
             return;
         cout << "****************************************************" << endl;
         cout << "Saving map to pcd files ..." << endl;
-        savePCDDirectory = std::getenv("HOME") + savePCDDirectory;
-        int unused = system((std::string("exec rm -r ") + savePCDDirectory).c_str());
-        unused = system((std::string("mkdir ") + savePCDDirectory).c_str());
+        savePCDDirectory = savePCDDirectory;
+        // int unused = system((std::string("exec rm -r ") + savePCDDirectory).c_str());
+        // unused = system((std::string("mkdir ") + savePCDDirectory).c_str());
         pcl::io::savePCDFileASCII(savePCDDirectory + "trajectory.pcd", *cloudKeyPoses3D);
         pcl::io::savePCDFileASCII(savePCDDirectory + "transformations.pcd", *cloudKeyPoses6D);
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalCornerCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
@@ -685,9 +766,23 @@ public:
         pcl::io::savePCDFileASCII(savePCDDirectory + "cloudSurf.pcd", *globalSurfCloudDS);
         *globalMapCloud += *globalCornerCloud;
         *globalMapCloud += *globalSurfCloud;
-        pcl::io::savePCDFileASCII(savePCDDirectory + "cloudGlobal.pcd", *globalMapCloud);
-        cout << "****************************************************" << endl;
-        cout << "Saving map to pcd files completed" << endl;
+        // pcl::io::savePCDFileASCII(savePCDDirectory + "cloudGlobal.pcd", *globalMapCloud);
+        // cout << "****************************************************" << endl;
+        // cout << "Saving map to pcd files completed" << endl;
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr filteredMap(new pcl::PointCloud<pcl::PointXYZRGB>());
+        for (const auto &pt : globalMapCloud->points)
+        {
+            if (!(pt.r == 0 && pt.g == 0 && pt.b == 0))
+            {
+                filteredMap->points.push_back(pt);
+            }
+        }
+        filteredMap->width = filteredMap->points.size();
+        filteredMap->height = 1;
+        filteredMap->is_dense = true;
+
+        // [2] 저장
+        pcl::io::savePCDFileASCII(savePCDDirectory + "cloudGlobal.pcd", *filteredMap);
     }
 
     void publishGlobalMap()
