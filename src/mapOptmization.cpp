@@ -510,15 +510,15 @@ public:
                                       pointRGB.b = color[2];
                                   }
                               }
-                              else
-                              {
-                                  pointRGB.x = point.x;
-                                  pointRGB.y = point.y;
-                                  pointRGB.z = point.z;
-                                  pointRGB.r = 0;
-                                  pointRGB.g = 0;
-                                  pointRGB.b = 0;
-                              }
+                            //   else
+                            //   {
+                            //       pointRGB.x = point.x;
+                            //       pointRGB.y = point.y;
+                            //       pointRGB.z = point.z;
+                            //       pointRGB.r = 0;
+                            //       pointRGB.g = 0;
+                            //       pointRGB.b = 0;
+                            //   }
 
                               laserCloudCornerLast->push_back(pointRGB);
                               cloud_corner.nextPoint();
@@ -597,15 +597,15 @@ public:
                                       pointRGB.b = color[2];
                                   }
                               }
-                              else
-                              {
-                                  pointRGB.x = point.x;
-                                  pointRGB.y = point.y;
-                                  pointRGB.z = point.z;
-                                  pointRGB.r = 0;
-                                  pointRGB.g = 0;
-                                  pointRGB.b = 0;
-                              }
+                            //   else
+                            //   {
+                            //       pointRGB.x = point.x;
+                            //       pointRGB.y = point.y;
+                            //       pointRGB.z = point.z;
+                            //       pointRGB.r = 0;
+                            //       pointRGB.g = 0;
+                            //       pointRGB.b = 0;
+                            //   }
 
                               laserCloudSurfLast->push_back(pointRGB);
                               cloud_surface.nextPoint();
@@ -766,23 +766,23 @@ public:
         pcl::io::savePCDFileASCII(savePCDDirectory + "cloudSurf.pcd", *globalSurfCloudDS);
         *globalMapCloud += *globalCornerCloud;
         *globalMapCloud += *globalSurfCloud;
-        // pcl::io::savePCDFileASCII(savePCDDirectory + "cloudGlobal.pcd", *globalMapCloud);
-        // cout << "****************************************************" << endl;
-        // cout << "Saving map to pcd files completed" << endl;
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr filteredMap(new pcl::PointCloud<pcl::PointXYZRGB>());
-        for (const auto &pt : globalMapCloud->points)
-        {
-            if (!(pt.r == 0 && pt.g == 0 && pt.b == 0))
-            {
-                filteredMap->points.push_back(pt);
-            }
-        }
-        filteredMap->width = filteredMap->points.size();
-        filteredMap->height = 1;
-        filteredMap->is_dense = true;
+        pcl::io::savePCDFileASCII(savePCDDirectory + "cloudGlobal.pcd", *globalMapCloud);
+        cout << "****************************************************" << endl;
+        cout << "Saving map to pcd files completed" << endl;
+        // pcl::PointCloud<pcl::PointXYZRGB>::Ptr filteredMap(new pcl::PointCloud<pcl::PointXYZRGB>());
+        // for (const auto &pt : globalMapCloud->points)
+        // {
+        //     if (!(pt.r == 0 && pt.g == 0 && pt.b == 0))
+        //     {
+        //         filteredMap->points.push_back(pt);
+        //     }
+        // }
+        // filteredMap->width = filteredMap->points.size();
+        // filteredMap->height = 1;
+        // filteredMap->is_dense = true;
 
         // [2] 저장
-        pcl::io::savePCDFileASCII(savePCDDirectory + "cloudGlobal.pcd", *filteredMap);
+        // pcl::io::savePCDFileASCII(savePCDDirectory + "cloudGlobal.pcd", *filteredMap);
     }
 
     void publishGlobalMap()
