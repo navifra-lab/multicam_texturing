@@ -1132,7 +1132,7 @@ public:
 
         // ICP Settings
         static pcl::IterativeClosestPoint<PointType, PointType> icp;
-        icp.setMaxCorrespondenceDistance(150); // giseop , use a value can cover 2*historyKeyframeSearchNum range in meter 
+        icp.setMaxCorrespondenceDistance(loopClosureCorrespondenceDistance); // giseop , use a value can cover 2*historyKeyframeSearchNum range in meter 
         icp.setMaximumIterations(100);
         icp.setTransformationEpsilon(1e-6);
         icp.setEuclideanFitnessEpsilon(1e-6);
