@@ -60,6 +60,8 @@
 
 using namespace std;
 
+typedef std::numeric_limits< double > dbl;
+
 typedef pcl::PointXYZI PointType;
 
 enum class SensorType { VELODYNE, OUSTER, LIVOX };
@@ -431,6 +433,26 @@ float pointDistance(PointType p)
 float pointDistance(PointType p1, PointType p2)
 {
     return sqrt((p1.x-p2.x)*(p1.x-p2.x) + (p1.y-p2.y)*(p1.y-p2.y) + (p1.z-p2.z)*(p1.z-p2.z));
+}
+
+void saveSCD(const std::string& fileName, const Eigen::MatrixXd& matrix, const std::string& delimiter = " ") {
+    int precision = 3;
+    const static Eigen::IOFormat the_format(precision, Eigen::DontAlignCols, delimiter, "\n");
+
+    std::ofstream file(fileName);
+    if (file.is_open()) {
+        file << matrix.format(the_format);
+        file.close();
+        RCLCPP_INFO(rclcpp::get_logger("saveSCD"), "Saved matrix to %s", fileName.c_str());
+    } else {
+        RCLCPP_ERROR(rclcpp::get_logger("saveSCD"), "Failed to open file: %s", fileName.c_str());
+    }
+}
+
+std::string padZeros(int val, int num_digits = 6) {
+    std::ostringstream out;
+    out << std::internal << std::setfill('0') << std::setw(num_digits) << val;
+    return out.str();
 }
 
 rmw_qos_profile_t qos_profile{

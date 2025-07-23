@@ -229,6 +229,8 @@ public:
 
         // convert cloud
         currentCloudMsg = std::move(cloudQueue.front());
+        cloudHeader = currentCloudMsg.header;
+        timeScanCur = stamp2Sec(cloudHeader.stamp);
         cloudQueue.pop_front();
         if (sensor == SensorType::VELODYNE || sensor == SensorType::LIVOX)
         {
@@ -259,8 +261,7 @@ public:
         }
 
         // get timestamp
-        cloudHeader = currentCloudMsg.header;
-        timeScanCur = stamp2Sec(cloudHeader.stamp);
+
         timeScanEnd = timeScanCur + laserCloudIn->points.back().time;
 
         // remove Nan

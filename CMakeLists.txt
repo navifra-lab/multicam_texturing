@@ -52,7 +52,7 @@ ament_target_dependencies(${PROJECT_NAME}_imuPreintegration rclcpp rclpy cv_brid
 target_link_libraries(${PROJECT_NAME}_imuPreintegration gtsam ${pcl_conversions_LIBRARIES})
 rosidl_target_interfaces(${PROJECT_NAME}_imuPreintegration ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
-add_executable(${PROJECT_NAME}_mapOptimization src/mapOptmization.cpp)
+add_executable(${PROJECT_NAME}_mapOptimization src/mapOptmization.cpp src/Scancontext.cpp)
 ament_target_dependencies(${PROJECT_NAME}_mapOptimization rclcpp rclpy cv_bridge std_msgs sensor_msgs geometry_msgs nav_msgs pcl_msgs visualization_msgs tf2 tf2_ros tf2_eigen tf2_sensor_msgs tf2_geometry_msgs OpenCV PCL GTSAM)
 target_link_libraries(${PROJECT_NAME}_mapOptimization gtsam ${pcl_conversions_LIBRARIES})
 rosidl_target_interfaces(${PROJECT_NAME}_mapOptimization ${PROJECT_NAME} "rosidl_typesupport_cpp")
