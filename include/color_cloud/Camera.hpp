@@ -99,13 +99,13 @@ namespace color_point_cloud {
             rectification_matrix_(2, 1) = msg->r[7];
             rectification_matrix_(2, 2) = msg->r[8];
 
-            projection_matrix_(0, 0) = msg->p[0];
+            projection_matrix_(0, 0) = msg->k[0];
             projection_matrix_(0, 1) = 0;
-            projection_matrix_(0, 2) = msg->p[2];
+            projection_matrix_(0, 2) = msg->k[2];
             projection_matrix_(0, 3) = 0;
             projection_matrix_(1, 0) = 0;
-            projection_matrix_(1, 1) = msg->p[5];
-            projection_matrix_(1, 2) = msg->p[6];
+            projection_matrix_(1, 1) = msg->k[4];
+            projection_matrix_(1, 2) = msg->k[5];
             projection_matrix_(1, 3) = 0;
             projection_matrix_(2, 0) = 0;
             projection_matrix_(2, 1) = 0;

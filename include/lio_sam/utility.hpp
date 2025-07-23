@@ -146,6 +146,7 @@ public:
     float historyKeyframeSearchTimeDiff;
     int   historyKeyframeSearchNum;
     float historyKeyframeFitnessScore;
+    float loopClosureCorrespondenceDistance;
 
     // global map visualization radius
     float globalMapVisualizationSearchRadius;
@@ -305,6 +306,8 @@ public:
         get_parameter("historyKeyframeSearchNum", historyKeyframeSearchNum);
         declare_parameter("historyKeyframeFitnessScore", 0.3);
         get_parameter("historyKeyframeFitnessScore", historyKeyframeFitnessScore);
+        declare_parameter("loopClosureCorrespondenceDistance", 0.3);
+        get_parameter("loopClosureCorrespondenceDistance", loopClosureCorrespondenceDistance);
 
         declare_parameter("globalMapVisualizationSearchRadius", 1000.0);
         get_parameter("globalMapVisualizationSearchRadius", globalMapVisualizationSearchRadius);

@@ -323,17 +323,80 @@ public:
                             const sensor_msgs::msg::CameraInfo::ConstSharedPtr &msg) {
 //                         RCLCPP_INFO(this->get_logger(), "Received camera_info on topic %s", camera_topic.c_str());
                         camera_type_stdmap_[camera_topic]->set_camera_info(msg);
-                    }));
+                        // if (camera_type_stdmap_[camera_topic]->get_image_msg() == nullptr || camera_type_stdmap_[camera_topic]->get_camera_info() == nullptr) {
+                        //       return;
+                        //   }
+                        //   if (!camera_type_stdmap_[camera_topic]->is_info_initialized()) {
+                        //       RCLCPP_INFO(this->get_logger(), "Camera info is setting: %s", camera_topic.c_str());
+                        //       camera_type_stdmap_[camera_topic]->set_camera_utils(camera_type_stdmap_[camera_topic]->get_camera_info());
+                        //   }
+                        //   if (!camera_type_stdmap_[camera_topic]->is_transform_initialized() && camera_type_stdmap_[camera_topic]->is_info_initialized()) {
+                        //       std::optional<geometry_msgs::msg::TransformStamped> transform = (*transform_provider_ptr_)(
+                        //               camera_type_stdmap_[camera_topic]->get_camera_frame_id(), lidarFrame);
+                        //       if (!transform.has_value()) {
+                        //           return;
+                        //       }
+                        //       camera_type_stdmap_[camera_topic]->set_lidar_to_camera_matrix(transform.value());
+                        //       camera_type_stdmap_[camera_topic]->set_lidar_to_camera_projection_matrix();
+                        //     }
+                }));
         }
 
         transform_provider_ptr_ = std::make_shared<color_point_cloud::TransformProvider>(this->get_clock());
-
+//TODO duration
         const auto period_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                std::chrono::duration<double>(0.1));
+                std::chrono::duration<double>(0.01));
         camera_timer_ = rclcpp::create_timer(this, this->get_clock(), period_ns,
                                       std::bind(&mapOptimization::camera_callback, this));
 
         allocateMemory();
+    }
+    ~mapOptimization(){
+               cout << "****************************************************" << endl;
+        cout << "Saving map to pcd files ..." << endl;
+        savePCDDirectory = savePCDDirectory;
+        // int unused = system((std::string("exec rm -r ") + savePCDDirectory).c_str());
+        // unused = system((std::string("mkdir ") + savePCDDirectory).c_str());
+        pcl::io::savePCDFileBinary(savePCDDirectory + "trajectory.pcd", *cloudKeyPoses3D);
+        pcl::io::savePCDFileBinary(savePCDDirectory + "transformations.pcd", *cloudKeyPoses6D);
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalCornerCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalCornerCloudDS(new pcl::PointCloud<pcl::PointXYZRGB>());
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalSurfCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalSurfCloudDS(new pcl::PointCloud<pcl::PointXYZRGB>());
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalMapCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+        for (int i = 0; i < (int)cloudKeyPoses3D->size(); i++) {
+            *globalCornerCloud += *transformPointCloud(cornerCloudKeyFrames[i],  &cloudKeyPoses6D->points[i]);
+            *globalSurfCloud   += *transformPointCloud(surfCloudKeyFrames[i],    &cloudKeyPoses6D->points[i]);
+            cout << "\r" << std::flush << "Processing feature cloud " << i << " of " << cloudKeyPoses6D->size() << " ...";
+        }
+        downSizeFilterCornerRGB.setInputCloud(globalCornerCloud);
+        downSizeFilterCornerRGB.filter(*globalCornerCloudDS);
+        pcl::io::savePCDFileBinary(savePCDDirectory + "cloudCorner.pcd", *globalCornerCloudDS);
+        downSizeFilterSurfRGB.setInputCloud(globalSurfCloud);
+        downSizeFilterSurfRGB.filter(*globalSurfCloudDS);
+        pcl::io::savePCDFileBinary(savePCDDirectory + "cloudSurf.pcd", *globalSurfCloudDS);
+        *globalMapCloud += *globalCornerCloud;
+        *globalMapCloud += *globalSurfCloud;
+
+
+        downSizeFilterSurfRGB.filter(*globalMapCloud);
+        pcl::io::savePCDFileBinary(savePCDDirectory + "cloudGlobal.pcd", *globalMapCloud);
+        // cout << "****************************************************" << endl;
+        // cout << "Saving map to pcd files completed" << endl;
+        // pcl::PointCloud<pcl::PointXYZRGB>::Ptr filteredMap(new pcl::PointCloud<pcl::PointXYZRGB>());
+        // for (const auto &pt : globalMapCloud->points)
+        // {
+        //     if (!(pt.r == 0 && pt.g == 0 && pt.b == 0))
+        //     {
+        //         filteredMap->points.push_back(pt);
+        //     }
+        // }
+        // filteredMap->width = filteredMap->points.size();
+        // filteredMap->height = 1;
+        // filteredMap->is_dense = true;
+
+        // // [2] 저장
+        // pcl::io::savePCDFileASCII(savePCDDirectory + "cloudGlobal_2.pcd", *filteredMap);
     }
 
     void allocateMemory()
@@ -438,8 +501,12 @@ public:
                           }
 
                           color_point_cloud::PointCloudConst cloud_corner{msgIn->cloud_corner};
+                          rclcpp::Time lidar_time(msgIn->cloud_corner.header.stamp);
+                          rclcpp::Time image_time(pair.second->get_image_msg()->header.stamp);
+                          double time_diff = std::fabs((lidar_time - image_time).seconds());
+                          double time_diff_cond = 1.1;
 
-                          #pragma omp parallel for num_threads(numberOfCores)
+#pragma omp parallel for num_threads(numberOfCores)
                           for (size_t i = 0; i < cloud_corner.getPointCount(); ++i) {
                               color_point_cloud::Point point{cloud_corner.getCurrentPoint()};
                               pcl::PointXYZRGB pointRGB;
@@ -490,7 +557,9 @@ public:
                             //       pointRGB.b = 0;
                             //   }
 
-                              if (x > 0 && x < pair.second->get_image_width() && y > 0 && y < pair.second->get_image_height() && point3d_transformed_camera[2] > 0)
+
+
+                              if (x > 0 && x < pair.second->get_image_width() && y > 0 && y < pair.second->get_image_height() && point3d_transformed_camera[2] > 0 && time_diff<time_diff_cond)
                               {
                                   cv::Vec3d color = pair.second->get_cv_image().at<cv::Vec3b>(cv::Point(x, y));
                                   cv::Scalar color_scalar(color[0], color[1], color[2]);
@@ -577,7 +646,7 @@ public:
                             //       pointRGB.b = 0;
                             //   }
 
-                              if (x > 0 && x < pair.second->get_image_width() && y > 0 && y < pair.second->get_image_height() && point3d_transformed_camera[2] > 0)
+                              if (x > 0 && x < pair.second->get_image_width() && y > 0 && y < pair.second->get_image_height() && point3d_transformed_camera[2] > 0 && time_diff<time_diff_cond)
                               {
                                   cv::Vec3d color = pair.second->get_cv_image().at<cv::Vec3b>(cv::Point(x, y));
                                   cv::Scalar color_scalar(color[0], color[1], color[2]);
@@ -741,48 +810,48 @@ public:
         }
         if (savePCD == false)
             return;
-        cout << "****************************************************" << endl;
-        cout << "Saving map to pcd files ..." << endl;
-        savePCDDirectory = savePCDDirectory;
-        // int unused = system((std::string("exec rm -r ") + savePCDDirectory).c_str());
-        // unused = system((std::string("mkdir ") + savePCDDirectory).c_str());
-        pcl::io::savePCDFileASCII(savePCDDirectory + "trajectory.pcd", *cloudKeyPoses3D);
-        pcl::io::savePCDFileASCII(savePCDDirectory + "transformations.pcd", *cloudKeyPoses6D);
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalCornerCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalCornerCloudDS(new pcl::PointCloud<pcl::PointXYZRGB>());
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalSurfCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalSurfCloudDS(new pcl::PointCloud<pcl::PointXYZRGB>());
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalMapCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
-        for (int i = 0; i < (int)cloudKeyPoses3D->size(); i++) {
-            *globalCornerCloud += *transformPointCloud(cornerCloudKeyFrames[i],  &cloudKeyPoses6D->points[i]);
-            *globalSurfCloud   += *transformPointCloud(surfCloudKeyFrames[i],    &cloudKeyPoses6D->points[i]);
-            cout << "\r" << std::flush << "Processing feature cloud " << i << " of " << cloudKeyPoses6D->size() << " ...";
-        }
-        downSizeFilterCornerRGB.setInputCloud(globalCornerCloud);
-        downSizeFilterCornerRGB.filter(*globalCornerCloudDS);
-        pcl::io::savePCDFileASCII(savePCDDirectory + "cloudCorner.pcd", *globalCornerCloudDS);
-        downSizeFilterSurfRGB.setInputCloud(globalSurfCloud);
-        downSizeFilterSurfRGB.filter(*globalSurfCloudDS);
-        pcl::io::savePCDFileASCII(savePCDDirectory + "cloudSurf.pcd", *globalSurfCloudDS);
-        *globalMapCloud += *globalCornerCloud;
-        *globalMapCloud += *globalSurfCloud;
-        pcl::io::savePCDFileASCII(savePCDDirectory + "cloudGlobal.pcd", *globalMapCloud);
-        cout << "****************************************************" << endl;
-        cout << "Saving map to pcd files completed" << endl;
-        // pcl::PointCloud<pcl::PointXYZRGB>::Ptr filteredMap(new pcl::PointCloud<pcl::PointXYZRGB>());
-        // for (const auto &pt : globalMapCloud->points)
-        // {
-        //     if (!(pt.r == 0 && pt.g == 0 && pt.b == 0))
-        //     {
-        //         filteredMap->points.push_back(pt);
-        //     }
+        // cout << "****************************************************" << endl;
+        // cout << "Saving map to pcd files ..." << endl;
+        // savePCDDirectory = savePCDDirectory;
+        // // int unused = system((std::string("exec rm -r ") + savePCDDirectory).c_str());
+        // // unused = system((std::string("mkdir ") + savePCDDirectory).c_str());
+        // pcl::io::savePCDFileASCII(savePCDDirectory + "trajectory.pcd", *cloudKeyPoses3D);
+        // pcl::io::savePCDFileASCII(savePCDDirectory + "transformations.pcd", *cloudKeyPoses6D);
+        // pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalCornerCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+        // pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalCornerCloudDS(new pcl::PointCloud<pcl::PointXYZRGB>());
+        // pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalSurfCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+        // pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalSurfCloudDS(new pcl::PointCloud<pcl::PointXYZRGB>());
+        // pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalMapCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+        // for (int i = 0; i < (int)cloudKeyPoses3D->size(); i++) {
+        //     *globalCornerCloud += *transformPointCloud(cornerCloudKeyFrames[i],  &cloudKeyPoses6D->points[i]);
+        //     *globalSurfCloud   += *transformPointCloud(surfCloudKeyFrames[i],    &cloudKeyPoses6D->points[i]);
+        //     cout << "\r" << std::flush << "Processing feature cloud " << i << " of " << cloudKeyPoses6D->size() << " ...";
         // }
-        // filteredMap->width = filteredMap->points.size();
-        // filteredMap->height = 1;
-        // filteredMap->is_dense = true;
+        // downSizeFilterCornerRGB.setInputCloud(globalCornerCloud);
+        // downSizeFilterCornerRGB.filter(*globalCornerCloudDS);
+        // pcl::io::savePCDFileASCII(savePCDDirectory + "cloudCorner.pcd", *globalCornerCloudDS);
+        // downSizeFilterSurfRGB.setInputCloud(globalSurfCloud);
+        // downSizeFilterSurfRGB.filter(*globalSurfCloudDS);
+        // pcl::io::savePCDFileASCII(savePCDDirectory + "cloudSurf.pcd", *globalSurfCloudDS);
+        // *globalMapCloud += *globalCornerCloud;
+        // *globalMapCloud += *globalSurfCloud;
+        // pcl::io::savePCDFileASCII(savePCDDirectory + "cloudGlobal.pcd", *globalMapCloud);
+        // // cout << "****************************************************" << endl;
+        // // cout << "Saving map to pcd files completed" << endl;
+        // // pcl::PointCloud<pcl::PointXYZRGB>::Ptr filteredMap(new pcl::PointCloud<pcl::PointXYZRGB>());
+        // // for (const auto &pt : globalMapCloud->points)
+        // // {
+        // //     if (!(pt.r == 0 && pt.g == 0 && pt.b == 0))
+        // //     {
+        // //         filteredMap->points.push_back(pt);
+        // //     }
+        // // }
+        // // filteredMap->width = filteredMap->points.size();
+        // // filteredMap->height = 1;
+        // // filteredMap->is_dense = true;
 
-        // [2] 저장
-        // pcl::io::savePCDFileASCII(savePCDDirectory + "cloudGlobal.pcd", *filteredMap);
+        // // // [2] 저장
+        // // pcl::io::savePCDFileASCII(savePCDDirectory + "cloudGlobal_2.pcd", *filteredMap);
     }
 
     void publishGlobalMap()
@@ -905,7 +974,7 @@ public:
 
         // ICP Settings
         static pcl::IterativeClosestPoint<PointType, PointType> icp;
-        icp.setMaxCorrespondenceDistance(historyKeyframeSearchRadius*2);
+        icp.setMaxCorrespondenceDistance(loopClosureCorrespondenceDistance);
         icp.setMaximumIterations(100);
         icp.setTransformationEpsilon(1e-6);
         icp.setEuclideanFitnessEpsilon(1e-6);
@@ -917,8 +986,11 @@ public:
         pcl::PointCloud<PointType>::Ptr unused_result(new pcl::PointCloud<PointType>());
         icp.align(*unused_result);
 
-        if (icp.hasConverged() == false || icp.getFitnessScore() > historyKeyframeFitnessScore)
+        if (icp.hasConverged() == false || icp.getFitnessScore() > historyKeyframeFitnessScore){
             return;
+        }
+            
+            
 
         // publish corrected cloud
         if (pubIcpKeyFrames->get_subscription_count() != 0)
@@ -941,7 +1013,9 @@ public:
         gtsam::Pose3 poseTo = pclPointTogtsamPose3(copy_cloudKeyPoses6D->points[loopKeyPre]);
         gtsam::Vector Vector6(6);
         float noiseScore = icp.getFitnessScore();
+        std::cout<<"@@@@@@@@@@@@@@@@@@@ fitness score : "<<noiseScore<<std::endl;
         Vector6 << noiseScore, noiseScore, noiseScore, noiseScore, noiseScore, noiseScore;
+        // Vector6 << noiseScore*10, noiseScore*10, noiseScore*10, noiseScore*10, noiseScore*10, noiseScore*10;
         noiseModel::Diagonal::shared_ptr constraintNoise = noiseModel::Diagonal::Variances(Vector6);
 
         // Add pose constraint
@@ -1754,6 +1828,7 @@ public:
             initialEstimate.insert(0, trans2gtsamPose(transformTobeMapped));
         }else{
             noiseModel::Diagonal::shared_ptr odometryNoise = noiseModel::Diagonal::Variances((Vector(6) << 1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4).finished());
+            // noiseModel::Diagonal::shared_ptr odometryNoise = noiseModel::Diagonal::Variances((Vector(6) << 1e-1, 1e-1, 1e-1, 1/2, 1/2, 1/2).finished());
             gtsam::Pose3 poseFrom = pclPointTogtsamPose3(cloudKeyPoses6D->points.back());
             gtsam::Pose3 poseTo   = trans2gtsamPose(transformTobeMapped);
             gtSAMgraph.add(BetweenFactor<Pose3>(cloudKeyPoses3D->size()-1, cloudKeyPoses3D->size(), poseFrom.between(poseTo), odometryNoise));
@@ -1874,8 +1949,8 @@ public:
         // loop factor
         addLoopFactor();
 
-        // cout << "****************************************************" << endl;
-        // gtSAMgraph.print("GTSAM Graph:\n");
+        cout << "****************************************************" << endl;
+        gtSAMgraph.print("GTSAM Graph:\n");
 
         // update iSAM
         isam->update(gtSAMgraph, initialEstimate);
@@ -1900,8 +1975,8 @@ public:
 
         isamCurrentEstimate = isam->calculateEstimate();
         latestEstimate = isamCurrentEstimate.at<Pose3>(isamCurrentEstimate.size()-1);
-        // cout << "****************************************************" << endl;
-        // isamCurrentEstimate.print("Current estimate: ");
+        cout << "****************************************************" << endl;
+        isamCurrentEstimate.print("Current estimate: ");
 
         thisPose3D.x = latestEstimate.translation().x();
         thisPose3D.y = latestEstimate.translation().y();
@@ -1919,9 +1994,9 @@ public:
         thisPose6D.time = timeLaserInfoCur;
         cloudKeyPoses6D->push_back(thisPose6D);
 
-        // cout << "****************************************************" << endl;
-        // cout << "Pose covariance:" << endl;
-        // cout << isam->marginalCovariance(isamCurrentEstimate.size()-1) << endl << endl;
+        cout << "****************************************************" << endl;
+        cout << "Pose covariance:" << endl;
+        cout << isam->marginalCovariance(isamCurrentEstimate.size()-1) << endl << endl;
         poseCovariance = isam->marginalCovariance(isamCurrentEstimate.size()-1);
 
         // save updated transform
@@ -1974,6 +2049,8 @@ public:
 
                 updatePath(cloudKeyPoses6D->points[i]);
             }
+        std::cout<<"correct pose!!!!!!!!!!!!!"<<std::endl;
+
 
             aLoopIsClosed = false;
         }
