@@ -1,0 +1,102 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "inputs": [
+        {
+            "id": "target_node",
+            "type": "promptString",
+            "description": "Enter the Target Node.",
+            "default": "answer_node"
+        },
+        {
+            "id": "target_package",
+            "type": "promptString",
+            "description": "Enter the Target Package for debug launch",
+            "default": "answer_node"
+        },
+    ],
+    "configurations": [
+        {
+            "name": "Node Debugging",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/${input:target_package}/${input:target_node}",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "preLaunchTask": "ROS2 debug build target pacakge",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "ROS2 Node RelWithDebInfo Debugging",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/${input:target_package}/${input:target_node}",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "preLaunchTask": "ROS2 RelWithDebInfo build target pacakge",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "ROS1 Node Debugging",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/devel/lib/${input:target_package}/${input:target_node}",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "preLaunchTask": "Build using build script",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "Node Execution",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/${input:target_package}/${input:target_node}",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "BASH_ENV",
+                    "value": "${workspaceFolder}/install/setup.zsh"
+                }
+            ],
+            "externalConsole": false,
+            "preLaunchTask": "ROS2 release build with symlink"
+        }
+    ]
+}

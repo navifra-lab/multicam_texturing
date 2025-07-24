@@ -1,0 +1,186 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "inputs": [
+        {
+            "id": "target_package",
+            "type": "promptString",
+            "description": "Enter the target package name",
+            "default": "answer_node"
+        }
+    ],
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "ROS2 release build with no symlink",
+            "type": "shell",
+            "command": "colcon",
+            "args": [
+                "build",
+                "--cmake-args",
+                "-DCMAKE_BUILD_TYPE=Release"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "ROS2 release build with symlink",
+            "type": "shell",
+            "command": "colcon",
+            "args": [
+                "build",
+                "--symlink-install",
+                "--cmake-args",
+                "-DCMAKE_BUILD_TYPE=Release",
+                "--event-handlers",
+                "console_direct+"
+            ],
+            "group": {
+                "kind": "build",
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Build using build script",
+            "type": "shell",
+            "command": "scripts/build_answer.sh",
+            "group": {
+                "kind": "build",
+                "isDefault": "true",
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Build gazebo simulator using build script",
+            "type": "shell",
+            "command": "scripts/build_sim.sh",
+            "group": {
+                "kind": "build",
+                "isDefault": "true",
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Make Debian Package",
+            "type": "shell",
+            "command": "cd src/ANSWER && ./make_debian_package.sh",
+            "group": {
+                "kind": "build",
+                "isDefault": "true",
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "ROS2 clean build files",
+            "type": "shell",
+            "command": "rm",
+            "args": [
+                "-rf",
+                "build",
+                "install",
+                "log",
+                "devel"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "ROS2 release build target pacakge",
+            "type": "shell",
+            "command": "colcon",
+            "args": [
+                "build",
+                "--cmake-args",
+                "-DCMAKE_BUILD_TYPE=Release",
+                "--packages-up-to",
+                "${input:target_package}"
+            ],
+            "group": {
+                "kind": "build",
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "ROS2 debug build with symlink",
+            "type": "shell",
+            "command": "colcon",
+            "args": [
+                "build",
+                "--symlink-install",
+                "--cmake-args",
+                "-DCMAKE_BUILD_TYPE=Debug",
+                "--event-handlers",
+                "console_direct+"
+            ],
+            "group": {
+                "kind": "build",
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "ROS1 debug build",
+            "type": "shell",
+            "command": "catkin_make",
+            "args": [
+                "-DCMAKE_BUILD_TYPE=Debug",
+                "install"
+            ],
+            "group": {
+                "kind": "build",
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "ROS2 debug build target pacakge",
+            "type": "shell",
+            "command": "colcon",
+            "args": [
+                "build",
+                "--packages-up-to",
+                "${input:target_package}",
+                "--cmake-args",
+                "-DCMAKE_BUILD_TYPE=Debug",
+                "--symlink-install",
+                "--event-handlers",
+                "console_direct+"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "ROS2 RelWithDebInfo build target pacakge",
+            "type": "shell",
+            "command": "colcon",
+            "args": [
+                "build",
+                "--packages-up-to",
+                "${input:target_package}",
+                "--cmake-args",
+                "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
+                "--symlink-install",
+                "--event-handlers",
+                "console_direct+"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "ROS2 run gtest",
+            "type": "shell",
+            "command": "colcon",
+            "args": [
+                "test",
+                "--ctest-args",
+                "tests",
+                "--packages-select",
+                "${input:target_package}",
+                "--event-handlers",
+                "console_direct+"
+                // "--packages-up-to",
+                // "--cmake-args",
+                // "-DCMAKE_BUILD_TYPE=Debug",
+                // "--symlink-install"
+            ],
+            "problemMatcher": []
+        },
+    ]
+}

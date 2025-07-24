@@ -26,39 +26,56 @@ def generate_launch_description():
         Node(
             package='tf2_ros',
             executable='static_transform_publisher',
-            arguments='0.0 0.0 0.0 0.0 0.0 0.0 map odom'.split(' '),
+            arguments=['0', '0', '0', '0', '0', '0', 'map', 'odom'],
             parameters=[parameter_file],
             output='screen'
         ),
+        # Node(
+        #     package='robot_state_publisher',
+        #     executable='robot_state_publisher',
+        #     name='robot_state_publisher',
+        #     output='screen',
+        #     parameters=[{
+        #         'robot_description': Command(['xacro', ' ', xacro_path])
+        #     }]
+        # ),
+
+
         Node(
-            package='robot_state_publisher',
-            executable='robot_state_publisher',
-            name='robot_state_publisher',
-            output='screen',
-            parameters=[{
-                'robot_description': Command(['xacro', ' ', xacro_path])
-            }]
+            package='tf2_ros',
+            executable='static_transform_publisher',
+            name='static_tf_hrz_os_sensor',
+            arguments=['0', '0', '0', '0', '0', '0', 'base_link', 'hrz/os_sensor']
         ),
-        # Node(
-        #     package='robot_localization',
-        #     executable='ekf_node',
-        #     name='ekf_filter_node',
+        #  Node(
+        #     package='tf2_ros',
+        #     executable='static_transform_publisher',
+        #     # name='static_tf_camera_0',
         #     output='screen',
-        #     remappings=[
-        #         ('odometry/filtered', 'odometry/navsat')
-        #     ]
+        #     arguments=['0.0085', '-0.1517', '-0.2199', '-2.3827559', '1.5568481', '2.3296817', 'hrz/os_sensor', 'camera_0_frame']
         # ),
         # Node(
-        #     package='robot_localization',
-        #     executable='navsat_transform_node',
-        #     name='navsat_transform_node',
+        #     package='tf2_ros',
+        #     executable='static_transform_publisher',
+        #     # name='static_tf_camera_1',
         #     output='screen',
-        #     remappings=[
-        #         ('/imu/data', '/imu_correct'),
-        #         ('gps/fix', 'gps/fix'),
-        #         ('odometry/filtered', 'odometry/navsat')
-        #     ]
+        #     arguments=['0.0049', '-0.1505', '-0.221', '-1.5484562', '-0.0139626', '3.132866', 'hrz/os_sensor', 'camera_1_frame']
         # ),
+        # Node(
+        #     package='tf2_ros',
+        #     executable='static_transform_publisher',
+        #     # name='static_tf_camera_2',
+        #     output='screen',
+        #     arguments=['0.0031', '-0.1523', '-0.2198', '1.5515975', '0.0139626', '0', 'hrz/os_sensor', 'camera_2_frame']
+        # ),
+        # Node(
+        #     package='tf2_ros',
+        #     executable='static_transform_publisher',
+        #     # name='static_tf_camera_3',
+        #     output='screen',
+        #     arguments=['0.0', '-0.1446', '-0.2264', '0.1431548', '-1.491443', '1.4271958', 'hrz/os_sensor', 'camera_3_frame']
+        # ),
+
         Node(
             package='lio_sam',
             executable='lio_sam_imuPreintegration',
