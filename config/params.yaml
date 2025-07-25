@@ -6,7 +6,7 @@
     imuTopic: "/imu/data"                        # IMU data
     odomTopic: "/odometry/imu"                                    # IMU pre-preintegration odometry, same frequency as IMU
     gpsTopic: "/sensing/gnss/clap/ros/odometry"                   # GPS odometry topic from navsat, see module_navsat.launch file
-    use_sim_time: false
+    # use_sim_time: true
 
     # Frames
     lidarFrame: "hrz/os_sensor"
