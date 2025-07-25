@@ -1177,14 +1177,14 @@ class mapOptimization : public ParamServer {
     static int loopCount = 0;
 
     savePCDDirectory = std::string(std::getenv("HOME")) + "/.ros/";
-    pcl::io::savePCDFileBinary(
-        savePCDDirectory + "target_" +
-            std::to_string(loopCount) + ".pcd",
-        *closed_cloud);
-    pcl::io::savePCDFileBinary(
-        savePCDDirectory + "source_" +
-            std::to_string(loopCount) + ".pcd",
-        *prevKeyframeCloud);
+    // pcl::io::savePCDFileBinary(
+    //     savePCDDirectory + "target_" +
+    //         std::to_string(loopCount) + ".pcd",
+    //     *closed_cloud);
+    // pcl::io::savePCDFileBinary(
+    //     savePCDDirectory + "source_" +
+    //         std::to_string(loopCount) + ".pcd",
+    //     *prevKeyframeCloud);
 
     loopCount++;
     // Get pose transformation
@@ -2225,12 +2225,6 @@ class mapOptimization : public ParamServer {
       isam->update();
       isam->update();
       isam->update();
-
-      isam->update();
-      isam->update();
-      isam->update();
-      isam->update();
-      isam->update();
     }
 
     gtSAMgraph.resize(0);
@@ -2244,8 +2238,8 @@ class mapOptimization : public ParamServer {
     isamCurrentEstimate = isam->calculateEstimate();
     latestEstimate =
         isamCurrentEstimate.at<Pose3>(isamCurrentEstimate.size() - 1);
-    // cout << "****************************************************" << endl;
-    // isamCurrentEstimate.print("Current estimate: ");
+    cout << "****************************************************" << endl;
+    isamCurrentEstimate.print("Current estimate: ");
 
     thisPose3D.x = latestEstimate.translation().x();
     thisPose3D.y = latestEstimate.translation().y();

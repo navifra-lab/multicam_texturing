@@ -11,10 +11,6 @@ services:
       - /home/${USER}/navifra_source_repository/:/root/workspace/
       - /home/${USER}/.ros/:/root/.ros
     network_mode: host
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - capabilities: [gpu]
+    shm_size: 12G
     stdin_open: true
     tty: true
