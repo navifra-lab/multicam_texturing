@@ -22,6 +22,7 @@
 #include <gtsam/inference/Symbol.h>
 
 #include <gtsam/nonlinear/ISAM2.h>
+#include "pcl/registration/gicp.h"
 
 using namespace gtsam;
 
@@ -364,11 +365,21 @@ public:
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalSurfCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalSurfCloudDS(new pcl::PointCloud<pcl::PointXYZRGB>());
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalMapCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalMapCloud2(new pcl::PointCloud<pcl::PointXYZRGB>());
         for (int i = 0; i < (int)cloudKeyPoses3D->size(); i++) {
             *globalCornerCloud += *transformPointCloud(cornerCloudKeyFrames[i],  &cloudKeyPoses6D->points[i]);
             *globalSurfCloud   += *transformPointCloud(surfCloudKeyFrames[i],    &cloudKeyPoses6D->points[i]);
             cout << "\r" << std::flush << "Processing feature cloud " << i << " of " << cloudKeyPoses6D->size() << " ...";
         }
+        *globalMapCloud2 += *globalCornerCloud;
+        *globalMapCloud2 += *globalSurfCloud;
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr filteredCloud2(new pcl::PointCloud<pcl::PointXYZRGB>());
+        for (const auto &pt : globalMapCloud2->points)
+        {
+            if (!(pt.r == 0 && pt.g == 0 && pt.b == 0)) 
+                 filteredCloud2->points.push_back(pt);            
+        }
+
         downSizeFilterCornerRGB.setInputCloud(globalCornerCloud);
         downSizeFilterCornerRGB.filter(*globalCornerCloudDS);
         pcl::io::savePCDFileBinary(savePCDDirectory + "cloudCorner.pcd", *globalCornerCloudDS);
@@ -377,10 +388,20 @@ public:
         pcl::io::savePCDFileBinary(savePCDDirectory + "cloudSurf.pcd", *globalSurfCloudDS);
         *globalMapCloud += *globalCornerCloud;
         *globalMapCloud += *globalSurfCloud;
+        pcl::VoxelGrid<pcl::PointXYZRGB> downSizeSaveRGBMap;
+        downSizeSaveRGBMap.setLeafSize(saveLeafSize, saveLeafSize, saveLeafSize);
+        downSizeSaveRGBMap.filter(*globalMapCloud);
+
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr filteredCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+        for (const auto &pt : globalMapCloud->points)
+        {
+            if (!(pt.r == 0 && pt.g == 0 && pt.b == 0)) 
+                filteredCloud->points.push_back(pt);
+        }
 
 
-        downSizeFilterSurfRGB.filter(*globalMapCloud);
-        pcl::io::savePCDFileBinary(savePCDDirectory + "cloudGlobal.pcd", *globalMapCloud);
+        pcl::io::savePCDFileBinary(savePCDDirectory + "cloudGlobal_filtered.pcd", *filteredCloud);
+        pcl::io::savePCDFileBinary(savePCDDirectory + "cloudGlobal.pcd", *filteredCloud2);
         // cout << "****************************************************" << endl;
         // cout << "Saving map to pcd files completed" << endl;
         // pcl::PointCloud<pcl::PointXYZRGB>::Ptr filteredMap(new pcl::PointCloud<pcl::PointXYZRGB>());
@@ -973,7 +994,7 @@ public:
         }
 
         // ICP Settings
-        static pcl::IterativeClosestPoint<PointType, PointType> icp;
+        static pcl::GeneralizedIterativeClosestPoint<PointType, PointType> icp;
         icp.setMaxCorrespondenceDistance(loopClosureCorrespondenceDistance);
         icp.setMaximumIterations(100);
         icp.setTransformationEpsilon(1e-6);

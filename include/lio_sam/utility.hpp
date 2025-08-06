@@ -123,7 +123,8 @@ public:
     // voxel filter paprams
     float odometrySurfLeafSize;
     float mappingCornerLeafSize;
-    float mappingSurfLeafSize ;
+    float mappingSurfLeafSize;
+    float saveLeafSize;
 
     float z_tollerance;
     float rotation_tollerance;
@@ -272,6 +273,8 @@ public:
         get_parameter("mappingCornerLeafSize", mappingCornerLeafSize);
         declare_parameter("mappingSurfLeafSize", 0.4);
         get_parameter("mappingSurfLeafSize", mappingSurfLeafSize);
+        declare_parameter("saveLeafSize", 0.4);
+        get_parameter("saveLeafSize", saveLeafSize);
 
         declare_parameter("z_tollerance", 1000.0);
         get_parameter("z_tollerance", z_tollerance);
