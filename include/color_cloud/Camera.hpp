@@ -38,11 +38,46 @@ namespace color_point_cloud {
             } catch (cv_bridge::Exception &e) {
                 return;
             }
-            cv::undistort(cv_ptr->image, cv_image_, get_camera_matrix_cv(), get_distortion_matrix_cv());
+            // cv::undistort(cv_ptr->image, cv_image_, get_camera_matrix_cv(), get_distortion_matrix_cv());
+            cv::fisheye::undistortImage(cv_ptr->image, cv_image_, get_camera_matrix_cv(), get_distortion_matrix_cv());
+        }
+
+        void set_cv_image_from_compressed(const sensor_msgs::msg::CompressedImage::ConstSharedPtr &msg)
+        {
+            if (!compressed_image_msg_)
+            {
+                RCLCPP_WARN(rclcpp::get_logger("CameraType"), "Compressed image message is null");
+                return;
+            }
+            try
+            {
+                // Decode compressed image
+                const auto &compressed_msg = compressed_image_msg_;
+                cv::Mat compressed(1, compressed_msg->data.size(), CV_8UC1, const_cast<unsigned char *>(compressed_msg->data.data()));
+                cv::Mat decoded = cv::imdecode(compressed, cv::IMREAD_COLOR);
+
+                if (decoded.empty())
+                {
+                    RCLCPP_WARN(rclcpp::get_logger("CameraType"), "Failed to decode compressed image");
+                    return;
+                }
+
+                // Undistort
+                // cv::undistort(decoded, cv_image_, get_camera_matrix_cv(), get_distortion_matrix_cv());
+                cv::fisheye::undistortImage(decoded, cv_image_, get_camera_matrix_cv(), get_distortion_matrix_cv());
+            }
+            catch (const std::exception &e)
+            {
+                RCLCPP_ERROR(rclcpp::get_logger("CameraType"), "Exception during decoding or undistortion: %s", e.what());
+            }
         }
 
         void set_image_msg(const sensor_msgs::msg::Image::ConstSharedPtr &msg) {
             image_msg_ = msg;
+        }
+
+        void set_compressed_image_msg(const sensor_msgs::msg::CompressedImage::ConstSharedPtr &msg) {
+            compressed_image_msg_ = msg;
         }
 
         void set_camera_info(const sensor_msgs::msg::CameraInfo::ConstSharedPtr &msg) {
@@ -55,6 +90,10 @@ namespace color_point_cloud {
 
         sensor_msgs::msg::Image::ConstSharedPtr get_image_msg() {
             return image_msg_;
+        }
+
+        sensor_msgs::msg::CompressedImage::ConstSharedPtr get_compressed_image_msg() {
+            return compressed_image_msg_;
         }
 
         sensor_msgs::msg::CameraInfo::ConstSharedPtr get_camera_info() {
@@ -114,11 +153,10 @@ namespace color_point_cloud {
 
             distortion_matrix_(0, 0) = msg->d[0];
             distortion_matrix_(0, 1) = msg->d[1];
-            distortion_matrix_(0, 2) = msg->d[3];
-            distortion_matrix_(0, 3) = msg->d[4];
-            distortion_matrix_(0, 4) = msg->d[2];
+            distortion_matrix_(0, 2) = msg->d[2];
+            distortion_matrix_(0, 3) = msg->d[3];
 
-            distortion_matrix_cv_ = (cv::Mat_<double>(1, 5) << msg->d[0], msg->d[1], msg->d[3], msg->d[4], msg->d[2]);
+            distortion_matrix_cv_ = (cv::Mat_<double>(1, 4) << msg->d[0], msg->d[1], msg->d[2], msg->d[3]);
 
             is_info_initialized_ = true;
         }
@@ -201,6 +239,7 @@ namespace color_point_cloud {
         cv::Mat cv_image_;
 
         sensor_msgs::msg::Image::ConstSharedPtr image_msg_;
+        sensor_msgs::msg::CompressedImage::ConstSharedPtr compressed_image_msg_;
         sensor_msgs::msg::CameraInfo::ConstSharedPtr camera_info_;
 
         bool is_info_initialized_;

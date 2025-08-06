@@ -8,7 +8,7 @@
     gpsTopic: "/sensing/gnss/clap/ros/odometry"                   # GPS odometry topic from navsat, see module_navsat.launch file
 
     # Frames
-    lidarFrame: "hrz/os_sensor"
+    lidarFrame: "os_lidar"
     baselinkFrame: "base_link"
     odometryFrame: "odom"
     mapFrame: "map"
@@ -100,7 +100,7 @@
 
     #Color Cloud
     cameraTopics: ["/camera_1/","/camera_2/","/camera_3/"]
-    imageTopicLastName: "image_rect"
+    imageTopicLastName: "image_raw/compressed"
     cameraInfoTopicLastName: "camera_info"
 
     /camera_1/:

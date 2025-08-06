@@ -173,7 +173,7 @@ public:
 
     // Color Map
     std::map<std::string, color_point_cloud::CameraTypePtr> camera_type_stdmap_;
-    std::vector<rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr> image_subscribers_;
+    std::vector<rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr> image_subscribers_;
     std::vector<rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr> camera_info_subscribers_;
 
     color_point_cloud::TransformProviderConstPtr transform_provider_ptr_;
@@ -183,7 +183,7 @@ public:
     void camera_callback() {
         std::for_each(camera_type_stdmap_.begin(), camera_type_stdmap_.end(),
                       [this](const std::pair<std::string, color_point_cloud::CameraTypePtr> &pair) {
-                          if (pair.second->get_image_msg() == nullptr || pair.second->get_camera_info() == nullptr) {
+                          if (pair.second->get_compressed_image_msg() == nullptr || pair.second->get_camera_info() == nullptr) {
                               return;
                           }
                           if (!pair.second->is_info_initialized()) {
@@ -312,11 +312,11 @@ public:
             color_point_cloud::CameraTypePtr camera_type_ptr = std::make_shared<color_point_cloud::CameraType>(image_topic, camera_info_topic);
             camera_type_stdmap_[camera_topic] = camera_type_ptr;
 
-            this->image_subscribers_.push_back(this->create_subscription<sensor_msgs::msg::Image>(
+            this->image_subscribers_.push_back(this->create_subscription<sensor_msgs::msg::CompressedImage>(
                     image_topic, rclcpp::SensorDataQoS(),
-                    [this, image_topic, camera_topic](const sensor_msgs::msg::Image::ConstSharedPtr &msg) {
+                    [this, image_topic, camera_topic](const sensor_msgs::msg::CompressedImage::ConstSharedPtr &msg) {
 //                         RCLCPP_INFO(this->get_logger(), "Received image on topic %s", camera_topic.c_str());
-                        camera_type_stdmap_[camera_topic]->set_image_msg(msg);
+                        camera_type_stdmap_[camera_topic]->set_compressed_image_msg(msg);
                     }));
 
             auto cam_info = std::make_shared<sensor_msgs::msg::CameraInfo>();
@@ -500,7 +500,7 @@ public:
 
         std::for_each(camera_type_stdmap_.begin(), camera_type_stdmap_.end(),
                       [this, msgIn](const std::pair<std::string, color_point_cloud::CameraTypePtr> &pair) {
-                          if (pair.second->get_image_msg() == nullptr || pair.second->get_camera_info() == nullptr ||
+                          if (pair.second->get_compressed_image_msg() == nullptr || pair.second->get_camera_info() == nullptr ||
                               !pair.second->is_info_initialized() || !pair.second->is_transform_initialized()) {
                               RCLCPP_INFO(this->get_logger(),
                                           "Can't project camera: %s\n"
@@ -509,7 +509,7 @@ public:
                                           "Is lidar-camera transform received: %s\n"
                                           "Is camera utils initialized: %s",
                                           pair.first.c_str(),
-                                          pair.second->get_image_msg() != nullptr ? "true" : "false",
+                                          pair.second->get_compressed_image_msg() != nullptr ? "true" : "false",
                                           pair.second->get_camera_info() != nullptr ? "true" : "false",
                                           pair.second->is_transform_initialized() ? "true" : "false",
                                           pair.second->is_info_initialized() ? "true" : "false");
@@ -536,7 +536,7 @@ public:
                         //       //               time_diff, avg_time_diff, max_time_diff, min_time_diff);                              
                         //   }
 
-                          pair.second->set_cv_image(pair.second->get_image_msg());
+                          pair.second->set_cv_image_from_compressed(pair.second->get_compressed_image_msg());
                           const auto &image = pair.second->get_cv_image();
                           if (image.type() != CV_8UC3)
                           {
@@ -546,7 +546,7 @@ public:
 
                           color_point_cloud::PointCloudConst cloud_corner{msgIn->cloud_corner};
                           rclcpp::Time lidar_time(msgIn->cloud_corner.header.stamp);
-                          rclcpp::Time image_time(pair.second->get_image_msg()->header.stamp);
+                          rclcpp::Time image_time(pair.second->get_compressed_image_msg()->header.stamp);
                           double time_diff = std::fabs((lidar_time - image_time).seconds());
                           double time_diff_cond = 1.1;
 
@@ -610,18 +610,9 @@ public:
                                   pointRGB.x = point.x;
                                   pointRGB.y = point.y;
                                   pointRGB.z = point.z;
-                                  if (pair.second->get_image_msg()->encoding == "bgr8")
-                                  {
-                                      pointRGB.r = color[2];
-                                      pointRGB.g = color[1];
-                                      pointRGB.b = color[0];
-                                  }
-                                  else
-                                  {
-                                      pointRGB.r = color[0];
-                                      pointRGB.g = color[1];
-                                      pointRGB.b = color[2];
-                                  }
+                                  pointRGB.r = color[2];
+                                  pointRGB.g = color[1];
+                                  pointRGB.b = color[0];
                               }
                             //   else
                             //   {
@@ -697,18 +688,9 @@ public:
                                   pointRGB.x = point.x;
                                   pointRGB.y = point.y;
                                   pointRGB.z = point.z;
-                                  if (pair.second->get_image_msg()->encoding == "bgr8")
-                                  {
-                                      pointRGB.r = color[2];
-                                      pointRGB.g = color[1];
-                                      pointRGB.b = color[0];
-                                  }
-                                  else
-                                  {
-                                      pointRGB.r = color[0];
-                                      pointRGB.g = color[1];
-                                      pointRGB.b = color[2];
-                                  }
+                                  pointRGB.r = color[2];
+                                  pointRGB.g = color[1];
+                                  pointRGB.b = color[0];
                               }
                             //   else
                             //   {
