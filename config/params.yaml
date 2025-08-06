@@ -99,6 +99,27 @@
     globalMapVisualizationLeafSize: 0.4           # meters, global map visualization cloud density
 
     #Color Cloud
-    cameraTopics: ["/camera_0/","/camera_1/","/camera_2/","/camera_3/"]
+    cameraTopics: ["/camera_1/","/camera_2/","/camera_3/"]
     imageTopicLastName: "image_rect"
     cameraInfoTopicLastName: "camera_info"
+
+    /camera_1/:
+     frame_id: "camera_1_frame"
+     width: 1920
+     height: 1200     
+     K: [1013.79123509, 0.0, 951.8245492, 0.0, 1011.0954584, 591.99715282, 0.0, 0.0, 1.0]
+     D: [-0.03485084, -0.00257264, 0.00193454, -0.00158137]
+  
+    /camera_2/:
+     frame_id: "camera_2_frame"
+     width: 1920
+     height: 1200
+     K: [1032.57390613, 0.0, 946.52567841, 0.0, 1034.61733446, 613.29463012, 0.0, 0.0, 1.0]
+     D: [-0.03372804, -0.00759129, 0.00588024, -0.00270408]
+    
+    /camera_3/:
+     frame_id: "camera_3_frame"
+     width: 1920
+     height: 1200
+     K: [1032.46931045, 0.0, 941.046737, 0.0, 1028.88538792, 559.4877525, 0.0, 0.0, 1.0]
+     D: [-0.03595631, -0.00309445, 0.00080958, -0.00042075]

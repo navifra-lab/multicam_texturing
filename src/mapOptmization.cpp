@@ -200,7 +200,7 @@ public:
                               pair.second->set_lidar_to_camera_projection_matrix();
                           }
                       });
-    }
+    }    
 
     mapOptimization(const rclcpp::NodeOptions & options) : ParamServer("lio_sam_mapOptimization", options)
     {
@@ -319,28 +319,51 @@ public:
                         camera_type_stdmap_[camera_topic]->set_image_msg(msg);
                     }));
 
-            this->camera_info_subscribers_.push_back(this->create_subscription<sensor_msgs::msg::CameraInfo>(
-                    camera_info_topic, rclcpp::SensorDataQoS(), [this, camera_info_topic, camera_topic](
-                            const sensor_msgs::msg::CameraInfo::ConstSharedPtr &msg) {
-//                         RCLCPP_INFO(this->get_logger(), "Received camera_info on topic %s", camera_topic.c_str());
-                        camera_type_stdmap_[camera_topic]->set_camera_info(msg);
-                        // if (camera_type_stdmap_[camera_topic]->get_image_msg() == nullptr || camera_type_stdmap_[camera_topic]->get_camera_info() == nullptr) {
-                        //       return;
-                        //   }
-                        //   if (!camera_type_stdmap_[camera_topic]->is_info_initialized()) {
-                        //       RCLCPP_INFO(this->get_logger(), "Camera info is setting: %s", camera_topic.c_str());
-                        //       camera_type_stdmap_[camera_topic]->set_camera_utils(camera_type_stdmap_[camera_topic]->get_camera_info());
-                        //   }
-                        //   if (!camera_type_stdmap_[camera_topic]->is_transform_initialized() && camera_type_stdmap_[camera_topic]->is_info_initialized()) {
-                        //       std::optional<geometry_msgs::msg::TransformStamped> transform = (*transform_provider_ptr_)(
-                        //               camera_type_stdmap_[camera_topic]->get_camera_frame_id(), lidarFrame);
-                        //       if (!transform.has_value()) {
-                        //           return;
-                        //       }
-                        //       camera_type_stdmap_[camera_topic]->set_lidar_to_camera_matrix(transform.value());
-                        //       camera_type_stdmap_[camera_topic]->set_lidar_to_camera_projection_matrix();
-                        //     }
-                }));
+            auto cam_info = std::make_shared<sensor_msgs::msg::CameraInfo>();
+
+            cam_info->header.frame_id = declare_parameter<std::string>(camera_topic + ".frame_id");
+            cam_info->width = declare_parameter<int>(camera_topic + ".width");
+            cam_info->height = declare_parameter<int>(camera_topic + ".height");
+            cam_info->distortion_model = "equidistant"; // 또는 "equidistant" 등 실제 모델에 맞게 설정
+
+            std::vector<double> K_vec = declare_parameter<std::vector<double>>(camera_topic + ".K");
+            std::vector<double> D_vec = declare_parameter<std::vector<double>>(camera_topic + ".D");
+
+            // 벡터 사이즈 체크 (권장)
+            if (K_vec.size() != 9)
+            {
+                RCLCPP_ERROR(this->get_logger(), "[%s] Camera matrix K must have 9 elements!", camera_topic.c_str());
+                continue;
+            }
+            if (D_vec.size() != 4 && D_vec.size() != 5)
+            {
+                RCLCPP_ERROR(this->get_logger(), "[%s] Distortion vector D must have 4 or 5 elements!", camera_topic.c_str());
+                continue;
+            }
+
+            // array 복사
+            std::copy(K_vec.begin(), K_vec.end(), cam_info->k.begin());
+            cam_info->d = D_vec;
+
+            // R = identity
+            cam_info->r = {1.0, 0.0, 0.0,
+                           0.0, 1.0, 0.0,
+                           0.0, 0.0, 1.0};
+
+            // P = K padded to 3x4
+            cam_info->p = {
+                K_vec[0], K_vec[1], K_vec[2], 0.0,
+                K_vec[3], K_vec[4], K_vec[5], 0.0,
+                K_vec[6], K_vec[7], K_vec[8], 0.0};
+
+            camera_type_stdmap_[camera_topic]->set_camera_info(cam_info);
+
+//             this->camera_info_subscribers_.push_back(this->create_subscription<sensor_msgs::msg::CameraInfo>(
+//                     camera_info_topic, rclcpp::SensorDataQoS(), [this, camera_info_topic, camera_topic](
+//                             const sensor_msgs::msg::CameraInfo::ConstSharedPtr &msg) {
+// //                         RCLCPP_INFO(this->get_logger(), "Received camera_info on topic %s", camera_topic.c_str());
+//                         camera_type_stdmap_[camera_topic]->set_camera_info(msg);
+//                 }));
         }
 
         transform_provider_ptr_ = std::make_shared<color_point_cloud::TransformProvider>(this->get_clock());
