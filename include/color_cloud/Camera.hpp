@@ -27,7 +27,7 @@ namespace color_point_cloud {
     public:
         CameraType(std::string image_topic, std::string camera_info_topic) :
                 image_topic_(std::move(image_topic)), camera_info_topic_(std::move(camera_info_topic)),
-                is_info_initialized_(false), is_transform_initialized_(false), image_width_(0), image_height_(0) {
+                is_info_initialized_(false), is_transform_initialized_(false), is_map_initialized_(false), image_width_(0), image_height_(0) {
 
         }
 
@@ -51,6 +51,7 @@ namespace color_point_cloud {
             }
             try
             {
+                cv::Mat dist = get_distortion_matrix_cv();
                 // Decode compressed image
                 const auto &compressed_msg = compressed_image_msg_;
                 cv::Mat compressed(1, compressed_msg->data.size(), CV_8UC1, const_cast<unsigned char *>(compressed_msg->data.data()));
@@ -61,10 +62,18 @@ namespace color_point_cloud {
                     RCLCPP_WARN(rclcpp::get_logger("CameraType"), "Failed to decode compressed image");
                     return;
                 }
+                if (!is_map_initialized_)
+                {
+                    RCLCPP_WARN(rclcpp::get_logger("CameraType"), "Failed to undistortion map initialized");
+                    return;
+                }
+
+                // 3. remap으로 보정
+                cv::remap(decoded, cv_image_, map1, map2, cv::INTER_LINEAR, cv::BORDER_CONSTANT);
 
                 // Undistort
                 // cv::undistort(decoded, cv_image_, get_camera_matrix_cv(), get_distortion_matrix_cv());
-                cv::fisheye::undistortImage(decoded, cv_image_, get_camera_matrix_cv(), get_distortion_matrix_cv());
+                // cv::fisheye::undistortImage(decoded, cv_image_, get_camera_matrix_cv(), get_distortion_matrix_cv());
             }
             catch (const std::exception &e)
             {
@@ -158,6 +167,21 @@ namespace color_point_cloud {
 
             distortion_matrix_cv_ = (cv::Mat_<double>(1, 4) << msg->d[0], msg->d[1], msg->d[2], msg->d[3]);
 
+            cv::Size image_size(image_width_, image_height_); // 1920x1200
+
+            cv::Mat R = cv::Mat::eye(3, 3, CV_64F); // Rectification matrix = Identity
+
+            cv::fisheye::initUndistortRectifyMap(
+                camera_matrix_cv_,     // Intrinsic matrix (K)
+                distortion_matrix_cv_, // Distortion coefficients (D)
+                R,                          // Rectification (usually identity)
+                camera_matrix_cv_,     // New camera matrix (same as K)
+                image_size,                 // Output size
+                CV_16SC2,                   // Map format (recommended)
+                map1, map2);
+
+            is_map_initialized_ = true;
+
             is_info_initialized_ = true;
         }
 
@@ -216,7 +240,7 @@ namespace color_point_cloud {
             return projection_matrix_;
         }
 
-        Eigen::Matrix<double, 1, 5> get_distortion_matrix() {
+        Eigen::Matrix<double, 1, 4> get_distortion_matrix() {
             return distortion_matrix_;
         }
 
@@ -254,7 +278,7 @@ namespace color_point_cloud {
         Eigen::Matrix<double, 3, 3> camera_matrix_;
         Eigen::Matrix<double, 3, 3> rectification_matrix_;
         Eigen::Matrix<double, 3, 4> projection_matrix_;
-        Eigen::Matrix<double, 1, 5> distortion_matrix_;
+        Eigen::Matrix<double, 1, 4> distortion_matrix_;
 
         cv::Mat camera_matrix_cv_;
         cv::Mat distortion_matrix_cv_;
@@ -262,6 +286,9 @@ namespace color_point_cloud {
         Eigen::Matrix4d lidar_to_camera_matrix_;
 
         Eigen::Matrix<double, 3, 4> lidar_to_camera_projection_matrix_;
+
+        cv::Mat map1, map2;
+        bool is_map_initialized_;
     };
 
     typedef std::shared_ptr<CameraType> CameraTypePtr;

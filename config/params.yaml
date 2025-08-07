@@ -29,7 +29,7 @@
     Horizon_SCAN: 1024                            # lidar horizontal resolution (Velodyne:1800, Ouster:512,1024,2048, Livox Horizon: 4000)
     downsampleRate: 1                             # default: 1. Downsample your data if too many
     # points. i.e., 16 = 64 / 4, 16 = 16 / 1
-    lidarMinRange: 0.5                          # default: 1.0, minimum lidar range to be used
+    lidarMinRange: 1.0                         # default: 1.0, minimum lidar range to be used
     lidarMaxRange: 60.0                       # default: 1000.0, maximum lidar range to be used
 
     # IMU Settings
@@ -49,10 +49,10 @@
     extrinsicRot: [ -1.0, 0.0,  0.0,
                     0.0, 1.0,  0.0,
                     0.0, 0.0,  -1.0 ]
-    extrinsicRPY: [ 0.0, -1.0,  0.0,
-                        1.0, 0.0,  0.0,
-                        0.0, 0.0,  1.0 ]
-
+    extrinsicRPY: [ 0.0, 1.0,  0.0,
+                    -1.0, 0.0,  0.0,
+                    0.0, 0.0,  1.0 ]
+    
     # LOAM feature threshold
     edgeThreshold: 1.0
     surfThreshold: 0.1

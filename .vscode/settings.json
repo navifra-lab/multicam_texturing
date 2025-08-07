@@ -1,0 +1,14 @@
+{
+    "files.associations": {
+        "array": "cpp",
+        "bitset": "cpp",
+        "string_view": "cpp",
+        "initializer_list": "cpp",
+        "utility": "cpp",
+        "valarray": "cpp",
+        "core": "cpp",
+        "deque": "cpp",
+        "forward_list": "cpp",
+        "list": "cpp"
+    }
+}

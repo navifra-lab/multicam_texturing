@@ -304,6 +304,7 @@ public:
         downSizeFilterCornerRGB.setLeafSize(mappingCornerLeafSize, mappingCornerLeafSize, mappingCornerLeafSize);
         downSizeFilterSurfRGB.setLeafSize(mappingSurfLeafSize, mappingSurfLeafSize, mappingSurfLeafSize);
 
+
         // Color Map
         for (const auto &camera_topic : cameraTopics) {
             std::string image_topic = camera_topic + imageTopicLastName;
@@ -333,11 +334,6 @@ public:
             if (K_vec.size() != 9)
             {
                 RCLCPP_ERROR(this->get_logger(), "[%s] Camera matrix K must have 9 elements!", camera_topic.c_str());
-                continue;
-            }
-            if (D_vec.size() != 4 && D_vec.size() != 5)
-            {
-                RCLCPP_ERROR(this->get_logger(), "[%s] Distortion vector D must have 4 or 5 elements!", camera_topic.c_str());
                 continue;
             }
 
@@ -600,12 +596,17 @@ public:
                             //       pointRGB.g = 0;
                             //       pointRGB.b = 0;
                             //   }
+                              int xi = static_cast<int>(std::round(x));
+                              int yi = static_cast<int>(std::round(y));
+                              const auto &image = pair.second->get_cv_image();
 
-
-
-                              if (x > 0 && x < pair.second->get_image_width() && y > 0 && y < pair.second->get_image_height() && point3d_transformed_camera[2] > 0 && time_diff<time_diff_cond)
+                              if (!image.empty() &&
+                                  xi >= 0 && xi < image.cols &&
+                                  yi >= 0 && yi < image.rows &&
+                                  point3d_transformed_camera[2] > 0 &&
+                                  time_diff < time_diff_cond)
                               {
-                                  cv::Vec3d color = pair.second->get_cv_image().at<cv::Vec3b>(cv::Point(x, y));
+                                  cv::Vec3b color = image.at<cv::Vec3b>(yi, xi);
                                   cv::Scalar color_scalar(color[0], color[1], color[2]);
                                   pointRGB.x = point.x;
                                   pointRGB.y = point.y;
@@ -614,14 +615,17 @@ public:
                                   pointRGB.g = color[1];
                                   pointRGB.b = color[0];
                               }
-                            //   else
+
+                            //   if (x > 0 && x < pair.second->get_image_width() && y > 0 && y < pair.second->get_image_height() && point3d_transformed_camera[2] > 0 && time_diff < time_diff_cond)
                             //   {
+                            //       cv::Vec3d color = pair.second->get_cv_image().at<cv::Vec3b>(cv::Point(x, y));
+                            //       cv::Scalar color_scalar(color[0], color[1], color[2]);
                             //       pointRGB.x = point.x;
                             //       pointRGB.y = point.y;
                             //       pointRGB.z = point.z;
-                            //       pointRGB.r = 0;
-                            //       pointRGB.g = 0;
-                            //       pointRGB.b = 0;
+                            //       pointRGB.r = color[2];
+                            //       pointRGB.g = color[1];
+                            //       pointRGB.b = color[0];
                             //   }
 
                               laserCloudCornerLast->push_back(pointRGB);
@@ -630,7 +634,7 @@ public:
 
                           color_point_cloud::PointCloudConst cloud_surface{msgIn->cloud_surface};
 
-                          #pragma omp parallel for num_threads(numberOfCores)
+#pragma omp parallel for num_threads(numberOfCores)
                           for (size_t i = 0; i < cloud_surface.getPointCount(); ++i) {
                               color_point_cloud::Point point{cloud_surface.getCurrentPoint()};
                               pcl::PointXYZRGB pointRGB;
@@ -680,10 +684,17 @@ public:
                             //       pointRGB.g = 0;
                             //       pointRGB.b = 0;
                             //   }
+                              int xi = static_cast<int>(std::round(x));
+                              int yi = static_cast<int>(std::round(y));
+                              const auto &image = pair.second->get_cv_image();
 
-                              if (x > 0 && x < pair.second->get_image_width() && y > 0 && y < pair.second->get_image_height() && point3d_transformed_camera[2] > 0 && time_diff<time_diff_cond)
+                              if (!image.empty() &&
+                                  xi >= 0 && xi < image.cols &&
+                                  yi >= 0 && yi < image.rows &&
+                                  point3d_transformed_camera[2] > 0 &&
+                                  time_diff < time_diff_cond)
                               {
-                                  cv::Vec3d color = pair.second->get_cv_image().at<cv::Vec3b>(cv::Point(x, y));
+                                  cv::Vec3b color = image.at<cv::Vec3b>(yi, xi);
                                   cv::Scalar color_scalar(color[0], color[1], color[2]);
                                   pointRGB.x = point.x;
                                   pointRGB.y = point.y;
@@ -692,6 +703,17 @@ public:
                                   pointRGB.g = color[1];
                                   pointRGB.b = color[0];
                               }
+                            //   if (x > 0 && x < pair.second->get_image_width() && y > 0 && y < pair.second->get_image_height() && point3d_transformed_camera[2] > 0 && time_diff<time_diff_cond)
+                            //   {
+                            //       cv::Vec3d color = pair.second->get_cv_image().at<cv::Vec3b>(cv::Point(x, y));
+                            //       cv::Scalar color_scalar(color[0], color[1], color[2]);
+                            //       pointRGB.x = point.x;
+                            //       pointRGB.y = point.y;
+                            //       pointRGB.z = point.z;
+                            //       pointRGB.r = color[2];
+                            //       pointRGB.g = color[1];
+                            //       pointRGB.b = color[0];
+                            //   }
                             //   else
                             //   {
                             //       pointRGB.x = point.x;
@@ -1039,7 +1061,6 @@ public:
         gtsam::Pose3 poseTo = pclPointTogtsamPose3(copy_cloudKeyPoses6D->points[loopKeyPre]);
         gtsam::Vector Vector6(6);
         float noiseScore = icp.getFitnessScore();
-        std::cout<<"@@@@@@@@@@@@@@@@@@@ fitness score : "<<noiseScore<<std::endl;
         Vector6 << noiseScore, noiseScore, noiseScore, noiseScore, noiseScore, noiseScore;
         // Vector6 << noiseScore*10, noiseScore*10, noiseScore*10, noiseScore*10, noiseScore*10, noiseScore*10;
         noiseModel::Diagonal::shared_ptr constraintNoise = noiseModel::Diagonal::Variances(Vector6);
@@ -1975,8 +1996,8 @@ public:
         // loop factor
         addLoopFactor();
 
-        cout << "****************************************************" << endl;
-        gtSAMgraph.print("GTSAM Graph:\n");
+        // cout << "****************************************************" << endl;
+        // gtSAMgraph.print("GTSAM Graph:\n");
 
         // update iSAM
         isam->update(gtSAMgraph, initialEstimate);
@@ -2001,8 +2022,8 @@ public:
 
         isamCurrentEstimate = isam->calculateEstimate();
         latestEstimate = isamCurrentEstimate.at<Pose3>(isamCurrentEstimate.size()-1);
-        cout << "****************************************************" << endl;
-        isamCurrentEstimate.print("Current estimate: ");
+        // cout << "****************************************************" << endl;
+        // isamCurrentEstimate.print("Current estimate: ");
 
         thisPose3D.x = latestEstimate.translation().x();
         thisPose3D.y = latestEstimate.translation().y();
@@ -2020,9 +2041,9 @@ public:
         thisPose6D.time = timeLaserInfoCur;
         cloudKeyPoses6D->push_back(thisPose6D);
 
-        cout << "****************************************************" << endl;
-        cout << "Pose covariance:" << endl;
-        cout << isam->marginalCovariance(isamCurrentEstimate.size()-1) << endl << endl;
+        // cout << "****************************************************" << endl;
+        // cout << "Pose covariance:" << endl;
+        // cout << isam->marginalCovariance(isamCurrentEstimate.size()-1) << endl << endl;
         poseCovariance = isam->marginalCovariance(isamCurrentEstimate.size()-1);
 
         // save updated transform
