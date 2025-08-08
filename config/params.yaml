@@ -29,7 +29,7 @@
     Horizon_SCAN: 1024                            # lidar horizontal resolution (Velodyne:1800, Ouster:512,1024,2048, Livox Horizon: 4000)
     downsampleRate: 1                             # default: 1. Downsample your data if too many
     # points. i.e., 16 = 64 / 4, 16 = 16 / 1
-    lidarMinRange: 1.0                         # default: 1.0, minimum lidar range to be used
+    lidarMinRange: 0.5                         # default: 1.0, minimum lidar range to be used
     lidarMaxRange: 60.0                       # default: 1000.0, maximum lidar range to be used
 
     # IMU Settings
@@ -99,27 +99,30 @@
     globalMapVisualizationLeafSize: 0.4           # meters, global map visualization cloud density
 
     #Color Cloud
-    cameraTopics: ["/camera_1/","/camera_2/","/camera_3/"]
+    cameraTopics: ["/camera_0/","/camera_1/","/camera_2/"]
     imageTopicLastName: "image_raw/compressed"
     cameraInfoTopicLastName: "camera_info"
 
-    /camera_1/:
-     frame_id: "camera_1_frame"
+    /camera_0/:
+     frame_id: "camera_0_frame"
      width: 1920
      height: 1200     
-     K: [1013.79123509, 0.0, 951.8245492, 0.0, 1011.0954584, 591.99715282, 0.0, 0.0, 1.0]
-     D: [-0.03485084, -0.00257264, 0.00193454, -0.00158137]
+     K: [1032.46931045, 0.0, 941.046737, 0.0, 1028.88538792, 559.4877525, 0.0, 0.0, 1.0]
+     D: [-0.03595631, -0.00309445, 0.00080958, -0.00042075]
+     P: [892.876190028821,889.7768251745282,921.9305344422798,546.3007482270657]
   
-    /camera_2/:
-     frame_id: "camera_2_frame"
+    /camera_1/:
+     frame_id: "camera_1_frame"
      width: 1920
      height: 1200
      K: [1032.57390613, 0.0, 946.52567841, 0.0, 1034.61733446, 613.29463012, 0.0, 0.0, 1.0]
      D: [-0.03372804, -0.00759129, 0.00588024, -0.00270408]
+     P: [901.7897307707756,903.5743417052765,932.9338022610701,617.7030873060298]
     
-    /camera_3/:
-     frame_id: "camera_3_frame"
+    /camera_2/:
+     frame_id: "camera_2_frame"
      width: 1920
      height: 1200
-     K: [1032.46931045, 0.0, 941.046737, 0.0, 1028.88538792, 559.4877525, 0.0, 0.0, 1.0]
-     D: [-0.03595631, -0.00309445, 0.00080958, -0.00042075]
+     K: [1013.7912350936941, 0.0, 951.8245492029012, 0.0, 1011.0954584030746, 591.9971528158148, 0.0, 0.0, 1.0]
+     D: [-0.03485083845188179, -0.002572635844790844, 0.0019345372998260636, -0.0015813695807261237]
+     P: [877.006931049234,874.9428220052031,979.2620334908883,580.1504597393019]

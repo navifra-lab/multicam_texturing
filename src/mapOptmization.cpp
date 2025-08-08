@@ -31,6 +31,8 @@ using symbol_shorthand::V; // Vel   (xdot,ydot,zdot)
 using symbol_shorthand::B; // Bias  (ax,ay,az,gx,gy,gz)
 using symbol_shorthand::G; // GPS pose
 
+// int imgidx=0;
+
 //TODO Delete
 static double max_time_diff = 0.0;
 static double min_time_diff = std::numeric_limits<double>::max();
@@ -329,6 +331,7 @@ public:
 
             std::vector<double> K_vec = declare_parameter<std::vector<double>>(camera_topic + ".K");
             std::vector<double> D_vec = declare_parameter<std::vector<double>>(camera_topic + ".D");
+            std::vector<double> P_vec = declare_parameter<std::vector<double>>(camera_topic + ".P");
 
             // 벡터 사이즈 체크 (권장)
             if (K_vec.size() != 9)
@@ -348,9 +351,9 @@ public:
 
             // P = K padded to 3x4
             cam_info->p = {
-                K_vec[0], K_vec[1], K_vec[2], 0.0,
-                K_vec[3], K_vec[4], K_vec[5], 0.0,
-                K_vec[6], K_vec[7], K_vec[8], 0.0};
+                P_vec[0], 0.0, P_vec[2], 0.0,
+                0.0, P_vec[1], P_vec[3], 0.0,
+                0.0, 0.0, 1.0, 0.0};
 
             camera_type_stdmap_[camera_topic]->set_camera_info(cam_info);
 
@@ -534,6 +537,9 @@ public:
 
                           pair.second->set_cv_image_from_compressed(pair.second->get_compressed_image_msg());
                           const auto &image = pair.second->get_cv_image();
+                        //   std::string title = "/home/george/dataset/0807/rosbag2_2025_08_07-20_28_19/img/"+std::to_string(imgidx)+".jpg";
+                        //   cv::imwrite(title,image);
+                        //   imgidx++;
                           if (image.type() != CV_8UC3)
                           {
                               RCLCPP_WARN(this->get_logger(), "Image type is not CV_8UC3. Got: %d", image.type());
@@ -596,29 +602,17 @@ public:
                             //       pointRGB.g = 0;
                             //       pointRGB.b = 0;
                             //   }
-                              int xi = static_cast<int>(std::round(x));
-                              int yi = static_cast<int>(std::round(y));
-                              const auto &image = pair.second->get_cv_image();
+                            //   int xi = static_cast<int>(std::round(x));
+                            //   int yi = static_cast<int>(std::round(y));
+                            //   const auto &image = pair.second->get_cv_image();
 
-                              if (!image.empty() &&
-                                  xi >= 0 && xi < image.cols &&
-                                  yi >= 0 && yi < image.rows &&
-                                  point3d_transformed_camera[2] > 0 &&
-                                  time_diff < time_diff_cond)
-                              {
-                                  cv::Vec3b color = image.at<cv::Vec3b>(yi, xi);
-                                  cv::Scalar color_scalar(color[0], color[1], color[2]);
-                                  pointRGB.x = point.x;
-                                  pointRGB.y = point.y;
-                                  pointRGB.z = point.z;
-                                  pointRGB.r = color[2];
-                                  pointRGB.g = color[1];
-                                  pointRGB.b = color[0];
-                              }
-
-                            //   if (x > 0 && x < pair.second->get_image_width() && y > 0 && y < pair.second->get_image_height() && point3d_transformed_camera[2] > 0 && time_diff < time_diff_cond)
+                            //   if (!image.empty() &&
+                            //       xi >= 0 && xi < image.cols &&
+                            //       yi >= 0 && yi < image.rows &&
+                            //       point3d_transformed_camera[2] > 0 &&
+                            //       time_diff < time_diff_cond)
                             //   {
-                            //       cv::Vec3d color = pair.second->get_cv_image().at<cv::Vec3b>(cv::Point(x, y));
+                            //       cv::Vec3b color = image.at<cv::Vec3b>(yi, xi);
                             //       cv::Scalar color_scalar(color[0], color[1], color[2]);
                             //       pointRGB.x = point.x;
                             //       pointRGB.y = point.y;
@@ -627,6 +621,18 @@ public:
                             //       pointRGB.g = color[1];
                             //       pointRGB.b = color[0];
                             //   }
+
+                              if (x > 0 && x < pair.second->get_image_width() && y > 0 && y < pair.second->get_image_height() && point3d_transformed_camera[2] > 0 && time_diff < time_diff_cond)
+                              {
+                                  cv::Vec3d color = pair.second->get_cv_image().at<cv::Vec3b>(cv::Point(x, y));
+                                  cv::Scalar color_scalar(color[0], color[1], color[2]);
+                                  pointRGB.x = point.x;
+                                  pointRGB.y = point.y;
+                                  pointRGB.z = point.z;
+                                  pointRGB.r = color[2];
+                                  pointRGB.g = color[1];
+                                  pointRGB.b = color[0];
+                              }
 
                               laserCloudCornerLast->push_back(pointRGB);
                               cloud_corner.nextPoint();
@@ -684,28 +690,17 @@ public:
                             //       pointRGB.g = 0;
                             //       pointRGB.b = 0;
                             //   }
-                              int xi = static_cast<int>(std::round(x));
-                              int yi = static_cast<int>(std::round(y));
-                              const auto &image = pair.second->get_cv_image();
+                            //   int xi = static_cast<int>(std::round(x));
+                            //   int yi = static_cast<int>(std::round(y));
+                            //   const auto &image = pair.second->get_cv_image();
 
-                              if (!image.empty() &&
-                                  xi >= 0 && xi < image.cols &&
-                                  yi >= 0 && yi < image.rows &&
-                                  point3d_transformed_camera[2] > 0 &&
-                                  time_diff < time_diff_cond)
-                              {
-                                  cv::Vec3b color = image.at<cv::Vec3b>(yi, xi);
-                                  cv::Scalar color_scalar(color[0], color[1], color[2]);
-                                  pointRGB.x = point.x;
-                                  pointRGB.y = point.y;
-                                  pointRGB.z = point.z;
-                                  pointRGB.r = color[2];
-                                  pointRGB.g = color[1];
-                                  pointRGB.b = color[0];
-                              }
-                            //   if (x > 0 && x < pair.second->get_image_width() && y > 0 && y < pair.second->get_image_height() && point3d_transformed_camera[2] > 0 && time_diff<time_diff_cond)
+                            //   if (!image.empty() &&
+                            //       xi >= 0 && xi < image.cols &&
+                            //       yi >= 0 && yi < image.rows &&
+                            //       point3d_transformed_camera[2] > 0 &&
+                            //       time_diff < time_diff_cond)
                             //   {
-                            //       cv::Vec3d color = pair.second->get_cv_image().at<cv::Vec3b>(cv::Point(x, y));
+                            //       cv::Vec3b color = image.at<cv::Vec3b>(yi, xi);
                             //       cv::Scalar color_scalar(color[0], color[1], color[2]);
                             //       pointRGB.x = point.x;
                             //       pointRGB.y = point.y;
@@ -714,6 +709,17 @@ public:
                             //       pointRGB.g = color[1];
                             //       pointRGB.b = color[0];
                             //   }
+                              if (x > 0 && x < pair.second->get_image_width() && y > 0 && y < pair.second->get_image_height() && point3d_transformed_camera[2] > 0 && time_diff<time_diff_cond)
+                              {
+                                  cv::Vec3d color = pair.second->get_cv_image().at<cv::Vec3b>(cv::Point(x, y));
+                                  cv::Scalar color_scalar(color[0], color[1], color[2]);
+                                  pointRGB.x = point.x;
+                                  pointRGB.y = point.y;
+                                  pointRGB.z = point.z;
+                                  pointRGB.r = color[2];
+                                  pointRGB.g = color[1];
+                                  pointRGB.b = color[0];
+                              }
                             //   else
                             //   {
                             //       pointRGB.x = point.x;
