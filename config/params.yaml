@@ -21,7 +21,7 @@
 
     # Export settings
     savePCD: true                               # https://github.com/TixiaoShan/LIO-SAM/issues/3
-    savePCDDirectory: "/dataset/onelidar/map/"         # in your home folder, starts and ends with "/". Warning: the code deletes "LOAM" folder then recreates it. See "mapOptimization" for implementation
+    savePCDDirectory: "/home/george/dataset/0808/rosbag2_2025_08_07-21_51_08/map/"         # in your home folder, starts and ends with "/". Warning: the code deletes "LOAM" folder then recreates it. See "mapOptimization" for implementation
 
     # Sensor Settings
     sensor: ouster                              # lidar sensor type, either 'velodyne', 'ouster' or 'livox'
@@ -29,8 +29,8 @@
     Horizon_SCAN: 1024                            # lidar horizontal resolution (Velodyne:1800, Ouster:512,1024,2048, Livox Horizon: 4000)
     downsampleRate: 1                             # default: 1. Downsample your data if too many
     # points. i.e., 16 = 64 / 4, 16 = 16 / 1
-    lidarMinRange: 0.5                         # default: 1.0, minimum lidar range to be used
-    lidarMaxRange: 60.0                       # default: 1000.0, maximum lidar range to be used
+    lidarMinRange: 1.0                         # default: 1.0, minimum lidar range to be used
+    lidarMaxRange: 80.0                       # default: 1000.0, maximum lidar range to be used
 
     # IMU Settings
     # imuAccNoise: 3.9939570888238808e-02
@@ -60,9 +60,9 @@
     surfFeatureMinValidNum: 100
 
     # voxel filter paprams
-    odometrySurfLeafSize: 0.1 #0.05                     # default: 0.4 - outdoor, 0.2 - indoor
-    mappingCornerLeafSize: 0.05 #0.025                    # default: 0.2 - outdoor, 0.1 - indoor
-    mappingSurfLeafSize: 0.1 #0.05                      # default: 0.4 - outdoor, 0.2 - indoor
+    odometrySurfLeafSize: 0.1 #0.1 #0.05                     # default: 0.4 - outdoor, 0.2 - indoor
+    mappingCornerLeafSize: 0.025 #0.05 #0.025                    # default: 0.2 - outdoor, 0.1 - indoor
+    mappingSurfLeafSize: 0.1 #0.1 #0.05                      # default: 0.4 - outdoor, 0.2 - indoor
     saveLeafSize : 0.1
 
     # robot motion constraint (in case you are using a 2D robot)
@@ -91,7 +91,7 @@
     # considered for loop closure
     historyKeyframeSearchNum: 25                  # number of hostory key frames will be fused into a
     # submap for loop closure
-    historyKeyframeFitnessScore: 0.3 #0.3              # icp threshold, the smaller the better alignment
+    historyKeyframeFitnessScore: 0.2 #0.3              # icp threshold, the smaller the better alignment
 
     # Visualization
     globalMapVisualizationSearchRadius: 1000.0    # meters, global map visualization radius
@@ -125,4 +125,4 @@
      height: 1200
      K: [1013.7912350936941, 0.0, 951.8245492029012, 0.0, 1011.0954584030746, 591.9971528158148, 0.0, 0.0, 1.0]
      D: [-0.03485083845188179, -0.002572635844790844, 0.0019345372998260636, -0.0015813695807261237]
-     P: [877.006931049234,874.9428220052031,979.2620334908883,580.1504597393019]
+     P: [874.9507060886988,872.6241208542509,942.9809828038187,589.2538081803823]

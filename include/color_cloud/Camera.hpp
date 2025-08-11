@@ -22,6 +22,8 @@
 
 #include <cv_bridge/cv_bridge.h>
 
+int idxxx =0;
+
 namespace color_point_cloud {
     class CameraType {
     public:
@@ -56,6 +58,10 @@ namespace color_point_cloud {
                 const auto &compressed_msg = compressed_image_msg_;
                 cv::Mat compressed(1, compressed_msg->data.size(), CV_8UC1, const_cast<unsigned char *>(compressed_msg->data.data()));
                 cv::Mat decoded = cv::imdecode(compressed, cv::IMREAD_COLOR);
+                std::string title = "/home/george/dataset/0807/rosbag2_2025_08_08-18_06_18/undis/"+ std::to_string(idxxx) + ".jpg";
+                //   std::cout<<title<<std::endl;
+                idxxx++;
+                cv::imwrite(title, decoded);
 
                 if (decoded.empty())
                 {
@@ -147,13 +153,13 @@ namespace color_point_cloud {
             rectification_matrix_(2, 1) = msg->r[7];
             rectification_matrix_(2, 2) = msg->r[8];
 
-            projection_matrix_(0, 0) = msg->k[0];
+            projection_matrix_(0, 0) = msg->p[0];
             projection_matrix_(0, 1) = 0;
-            projection_matrix_(0, 2) = msg->k[2];
+            projection_matrix_(0, 2) = msg->p[2];
             projection_matrix_(0, 3) = 0;
             projection_matrix_(1, 0) = 0;
-            projection_matrix_(1, 1) = msg->k[4];
-            projection_matrix_(1, 2) = msg->k[5];
+            projection_matrix_(1, 1) = msg->p[5];
+            projection_matrix_(1, 2) = msg->p[6];
             projection_matrix_(1, 3) = 0;
             projection_matrix_(2, 0) = 0;
             projection_matrix_(2, 1) = 0;
