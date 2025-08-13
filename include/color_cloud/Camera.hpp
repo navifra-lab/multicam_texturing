@@ -22,7 +22,7 @@
 
 #include <cv_bridge/cv_bridge.h>
 
-int idxxx =0;
+// int idxxx =0;
 
 namespace color_point_cloud {
     class CameraType {
@@ -57,25 +57,27 @@ namespace color_point_cloud {
                 // Decode compressed image
                 const auto &compressed_msg = compressed_image_msg_;
                 cv::Mat compressed(1, compressed_msg->data.size(), CV_8UC1, const_cast<unsigned char *>(compressed_msg->data.data()));
-                cv::Mat decoded = cv::imdecode(compressed, cv::IMREAD_COLOR);
-                std::string title = "/home/george/dataset/0807/rosbag2_2025_08_08-18_06_18/undis/"+ std::to_string(idxxx) + ".jpg";
+                // cv::Mat decoded = cv::imdecode(compressed, cv::IMREAD_COLOR);
+                cv_image_ = cv::imdecode(compressed, cv::IMREAD_COLOR);
+                // std::string title = "/home/george/dataset/debug/undis/"+ std::to_string(idxxx) + ".jpg";
                 //   std::cout<<title<<std::endl;
-                idxxx++;
-                cv::imwrite(title, decoded);
+                // idxxx++;
+                // cv::imwrite(title, decoded);
 
-                if (decoded.empty())
-                {
-                    RCLCPP_WARN(rclcpp::get_logger("CameraType"), "Failed to decode compressed image");
-                    return;
-                }
+                // if (decoded.empty())
+                // {
+                //     RCLCPP_WARN(rclcpp::get_logger("CameraType"), "Failed to decode compressed image");
+                //     return;
+                // }
                 if (!is_map_initialized_)
                 {
                     RCLCPP_WARN(rclcpp::get_logger("CameraType"), "Failed to undistortion map initialized");
                     return;
                 }
+                // cv_image_=decoded;
 
                 // 3. remap으로 보정
-                cv::remap(decoded, cv_image_, map1, map2, cv::INTER_LINEAR, cv::BORDER_CONSTANT);
+                // cv::remap(decoded, cv_image_, map1, map2, cv::INTER_LINEAR, cv::BORDER_CONSTANT);
 
                 // Undistort
                 // cv::undistort(decoded, cv_image_, get_camera_matrix_cv(), get_distortion_matrix_cv());
@@ -172,6 +174,7 @@ namespace color_point_cloud {
             distortion_matrix_(0, 3) = msg->d[3];
 
             distortion_matrix_cv_ = (cv::Mat_<double>(1, 4) << msg->d[0], msg->d[1], msg->d[2], msg->d[3]);
+            // std::cout<<"distortion : "<<distortion_matrix_cv_<<std::endl;
 
             cv::Size image_size(image_width_, image_height_); // 1920x1200
 

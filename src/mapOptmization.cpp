@@ -537,10 +537,10 @@ public:
 
                           pair.second->set_cv_image_from_compressed(pair.second->get_compressed_image_msg());
                           const auto &image = pair.second->get_cv_image();
-                          std::string title = "/home/george/dataset/0807/rosbag2_2025_08_08-18_06_18/img"+pair.first+std::to_string(imgidx)+".jpg";
+                          std::string title = "/home/george/dataset/debug/"+std::to_string(imgidx)+".jpg";
                         //   std::cout<<title<<std::endl;
                           cv::imwrite(title,image);
-                          std::cout<<pair.first.c_str()<<" : "<<pair.second->get_projection_matrix()<<std::endl;
+                        //   std::cout<<pair.first.c_str()<<" : "<<pair.second->get_projection_matrix()<<std::endl;
                           imgidx++;
                           if (image.type() != CV_8UC3)
                           {
