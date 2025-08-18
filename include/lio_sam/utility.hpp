@@ -493,4 +493,11 @@ auto qos_lidar = rclcpp::QoS(
     ),
     qos_profile_lidar);
 
+std::string padZeros(int val, int num_digits = 6) {
+  std::ostringstream out;
+  out << std::internal << std::setfill('0') << std::setw(num_digits) << val;
+  return out.str();
+}
+
+
 #endif

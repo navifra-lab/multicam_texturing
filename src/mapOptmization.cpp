@@ -98,6 +98,8 @@ public:
 
     vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> cornerCloudKeyFrames;
     vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> surfCloudKeyFrames;
+    vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> fullcornerCloudKeyFrames;
+    vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> fullsurfCloudKeyFrames;
     
     pcl::PointCloud<PointType>::Ptr cloudKeyPoses3D;
     pcl::PointCloud<PointTypePose>::Ptr cloudKeyPoses6D;
@@ -108,6 +110,8 @@ public:
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr laserCloudSurfLast; // surf feature set from odoOptimization
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr laserCloudCornerLastDS; // downsampled corner feature set from odoOptimization
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr laserCloudSurfLastDS; // downsampled surf feature set from odoOptimization
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr fulllaserCloudCornerLastDS; // downsampled corner feature set from odoOptimization
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr fulllaserCloudSurfLastDS; // downsampled surf feature set from odoOptimization
 
 //    pcl::PointCloud<pcl::PointXYZRGB>::Ptr laserCloudCornerLastRGB; // downsampled rgb corner feature
 //    pcl::PointCloud<pcl::PointXYZRGB>::Ptr laserCloudSurfLastRGB; // downsampled rgb surf feature
@@ -141,6 +145,8 @@ public:
 
     pcl::VoxelGrid<pcl::PointXYZRGB> downSizeFilterCornerRGB;
     pcl::VoxelGrid<pcl::PointXYZRGB> downSizeFilterSurfRGB;
+    pcl::VoxelGrid<pcl::PointXYZRGB> downSizeFilterCornerRGB2;
+    pcl::VoxelGrid<pcl::PointXYZRGB> downSizeFilterSurfRGB2;
 
     rclcpp::Time timeLaserInfoStamp;
     double timeLaserInfoCur;
@@ -176,11 +182,12 @@ public:
     // Color Map
     std::map<std::string, color_point_cloud::CameraTypePtr> camera_type_stdmap_;
     std::vector<rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr> image_subscribers_;
-    std::vector<rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr> camera_info_subscribers_;
+    // std::vector<rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr> camera_info_subscribers_;
 
     color_point_cloud::TransformProviderConstPtr transform_provider_ptr_;
 
     rclcpp::TimerBase::SharedPtr camera_timer_;
+    std::string saveNodePCDDirectory;
 
     void camera_callback() {
         std::for_each(camera_type_stdmap_.begin(), camera_type_stdmap_.end(),
@@ -306,11 +313,15 @@ public:
         downSizeFilterCornerRGB.setLeafSize(mappingCornerLeafSize, mappingCornerLeafSize, mappingCornerLeafSize);
         downSizeFilterSurfRGB.setLeafSize(mappingSurfLeafSize, mappingSurfLeafSize, mappingSurfLeafSize);
 
+        downSizeFilterCornerRGB2.setLeafSize(0.01, 0.01, 0.01);
+        downSizeFilterSurfRGB2.setLeafSize(0.01, 0.01, 0.01);
+
 
         // Color Map
         for (const auto &camera_topic : cameraTopics) {
             std::string image_topic = camera_topic + imageTopicLastName;
             std::string camera_info_topic = camera_topic + cameraInfoTopicLastName;
+
 
             color_point_cloud::CameraTypePtr camera_type_ptr = std::make_shared<color_point_cloud::CameraType>(image_topic, camera_info_topic);
             camera_type_stdmap_[camera_topic] = camera_type_ptr;
@@ -373,73 +384,110 @@ public:
                                       std::bind(&mapOptimization::camera_callback, this));
 
         allocateMemory();
+
+        saveNodePCDDirectory = savePCDDirectory + "Scans/";
     }
     ~mapOptimization(){
-               cout << "****************************************************" << endl;
+        cout << "****************************************************" << endl;
         cout << "Saving map to pcd files ..." << endl;
-        savePCDDirectory = savePCDDirectory;
-        // int unused = system((std::string("exec rm -r ") + savePCDDirectory).c_str());
-        // unused = system((std::string("mkdir ") + savePCDDirectory).c_str());
+
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalCornerCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalSurfCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalMapCloud2(new pcl::PointCloud<pcl::PointXYZRGB>());
+
+        size_t saveThreshold = 5000000; // 500만 개
+        size_t fileIndex = 0;
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr chunkCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+
+        for (int i = 0; i < (int)cloudKeyPoses3D->size(); i++)
+        {
+            *globalCornerCloud += *transformPointCloud(fullcornerCloudKeyFrames[i], &cloudKeyPoses6D->points[i]);
+            *globalSurfCloud += *transformPointCloud(fullsurfCloudKeyFrames[i], &cloudKeyPoses6D->points[i]);
+
+            cout << "\r" << std::flush << "Processing feature cloud "
+                 << i << " of " << cloudKeyPoses6D->size() << " ...";
+
+            // 합친 뒤 저장 조건 체크
+            *globalMapCloud2 = *globalCornerCloud + *globalSurfCloud;
+
+            for (const auto &pt : globalMapCloud2->points)
+            {
+                if (!(pt.r == 0 && pt.g == 0 && pt.b == 0))
+                    chunkCloud->points.push_back(pt);
+            }
+
+            if (chunkCloud->size() >= saveThreshold)
+            {
+                std::string filename = savePCDDirectory + "cloudGlobal_part" + std::to_string(fileIndex++) + ".pcd";
+                pcl::io::savePCDFileBinary(filename, *chunkCloud);
+                cout << "\nSaved " << filename << " with " << chunkCloud->size() << " points.\n";
+                chunkCloud->clear();
+            }
+
+            globalCornerCloud->clear();
+            globalSurfCloud->clear();
+            globalMapCloud2->clear();
+        }
+
+        // 남은 포인트 저장
+        if (!chunkCloud->empty())
+        {
+            std::string filename = savePCDDirectory + "cloudGlobal_part" + std::to_string(fileIndex++) + ".pcd";
+            pcl::io::savePCDFileBinary(filename, *chunkCloud);
+            cout << "\nSaved " << filename << " with " << chunkCloud->size() << " points.\n";
+        }
+
         pcl::io::savePCDFileBinary(savePCDDirectory + "trajectory.pcd", *cloudKeyPoses3D);
         pcl::io::savePCDFileBinary(savePCDDirectory + "transformations.pcd", *cloudKeyPoses6D);
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalCornerCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalCornerCloudDS(new pcl::PointCloud<pcl::PointXYZRGB>());
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalSurfCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalSurfCloudDS(new pcl::PointCloud<pcl::PointXYZRGB>());
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalMapCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalMapCloud2(new pcl::PointCloud<pcl::PointXYZRGB>());
-        for (int i = 0; i < (int)cloudKeyPoses3D->size(); i++) {
-            *globalCornerCloud += *transformPointCloud(cornerCloudKeyFrames[i],  &cloudKeyPoses6D->points[i]);
-            *globalSurfCloud   += *transformPointCloud(surfCloudKeyFrames[i],    &cloudKeyPoses6D->points[i]);
-            cout << "\r" << std::flush << "Processing feature cloud " << i << " of " << cloudKeyPoses6D->size() << " ...";
-        }
-        *globalMapCloud2 += *globalCornerCloud;
-        *globalMapCloud2 += *globalSurfCloud;
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr filteredCloud2(new pcl::PointCloud<pcl::PointXYZRGB>());
-        for (const auto &pt : globalMapCloud2->points)
-        {
-            if (!(pt.r == 0 && pt.g == 0 && pt.b == 0)) 
-                 filteredCloud2->points.push_back(pt);            
-        }
-
-        downSizeFilterCornerRGB.setInputCloud(globalCornerCloud);
-        downSizeFilterCornerRGB.filter(*globalCornerCloudDS);
-        pcl::io::savePCDFileBinary(savePCDDirectory + "cloudCorner.pcd", *globalCornerCloudDS);
-        downSizeFilterSurfRGB.setInputCloud(globalSurfCloud);
-        downSizeFilterSurfRGB.filter(*globalSurfCloudDS);
-        pcl::io::savePCDFileBinary(savePCDDirectory + "cloudSurf.pcd", *globalSurfCloudDS);
-        *globalMapCloud += *globalCornerCloud;
-        *globalMapCloud += *globalSurfCloud;
-        pcl::VoxelGrid<pcl::PointXYZRGB> downSizeSaveRGBMap;
-        downSizeSaveRGBMap.setLeafSize(saveLeafSize, saveLeafSize, saveLeafSize);
-        downSizeSaveRGBMap.filter(*globalMapCloud);
-
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr filteredCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
-        for (const auto &pt : globalMapCloud->points)
-        {
-            if (!(pt.r == 0 && pt.g == 0 && pt.b == 0)) 
-                filteredCloud->points.push_back(pt);
-        }
-
-
-        pcl::io::savePCDFileBinary(savePCDDirectory + "cloudGlobal_filtered.pcd", *filteredCloud);
-        pcl::io::savePCDFileBinary(savePCDDirectory + "cloudGlobal.pcd", *filteredCloud2);
         // cout << "****************************************************" << endl;
-        // cout << "Saving map to pcd files completed" << endl;
-        // pcl::PointCloud<pcl::PointXYZRGB>::Ptr filteredMap(new pcl::PointCloud<pcl::PointXYZRGB>());
+        // cout << "Saving map to pcd files ..." << endl;
+        // savePCDDirectory = savePCDDirectory;
+        // // int unused = system((std::string("exec rm -r ") + savePCDDirectory).c_str());
+        // // unused = system((std::string("mkdir ") + savePCDDirectory).c_str());
+        // pcl::io::savePCDFileBinary(savePCDDirectory + "trajectory.pcd", *cloudKeyPoses3D);
+        // pcl::io::savePCDFileBinary(savePCDDirectory + "transformations.pcd", *cloudKeyPoses6D);
+        // pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalCornerCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+        // pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalCornerCloudDS(new pcl::PointCloud<pcl::PointXYZRGB>());
+        // pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalSurfCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+        // pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalSurfCloudDS(new pcl::PointCloud<pcl::PointXYZRGB>());
+        // pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalMapCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+        // pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalMapCloud2(new pcl::PointCloud<pcl::PointXYZRGB>());
+        // for (int i = 0; i < (int)cloudKeyPoses3D->size(); i++) {
+        //     *globalCornerCloud += *transformPointCloud(cornerCloudKeyFrames[i],  &cloudKeyPoses6D->points[i]);
+        //     *globalSurfCloud   += *transformPointCloud(surfCloudKeyFrames[i],    &cloudKeyPoses6D->points[i]);
+        //     cout << "\r" << std::flush << "Processing feature cloud " << i << " of " << cloudKeyPoses6D->size() << " ...";
+        // }
+        // *globalMapCloud2 += *globalCornerCloud;
+        // *globalMapCloud2 += *globalSurfCloud;
+        // pcl::PointCloud<pcl::PointXYZRGB>::Ptr filteredCloud2(new pcl::PointCloud<pcl::PointXYZRGB>());
+        // for (const auto &pt : globalMapCloud2->points)
+        // {
+        //     if (!(pt.r == 0 && pt.g == 0 && pt.b == 0)) 
+        //          filteredCloud2->points.push_back(pt);            
+        // }
+
+        // downSizeFilterCornerRGB.setInputCloud(globalCornerCloud);
+        // downSizeFilterCornerRGB.filter(*globalCornerCloudDS);
+        // pcl::io::savePCDFileBinary(savePCDDirectory + "cloudCorner.pcd", *globalCornerCloudDS);
+        // downSizeFilterSurfRGB.setInputCloud(globalSurfCloud);
+        // downSizeFilterSurfRGB.filter(*globalSurfCloudDS);
+        // pcl::io::savePCDFileBinary(savePCDDirectory + "cloudSurf.pcd", *globalSurfCloudDS);
+        // *globalMapCloud += *globalCornerCloud;
+        // *globalMapCloud += *globalSurfCloud;
+        // pcl::VoxelGrid<pcl::PointXYZRGB> downSizeSaveRGBMap;
+        // downSizeSaveRGBMap.setLeafSize(saveLeafSize, saveLeafSize, saveLeafSize);
+        // downSizeSaveRGBMap.filter(*globalMapCloud);
+
+        // pcl::PointCloud<pcl::PointXYZRGB>::Ptr filteredCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
         // for (const auto &pt : globalMapCloud->points)
         // {
-        //     if (!(pt.r == 0 && pt.g == 0 && pt.b == 0))
-        //     {
-        //         filteredMap->points.push_back(pt);
-        //     }
+        //     if (!(pt.r == 0 && pt.g == 0 && pt.b == 0)) 
+        //         filteredCloud->points.push_back(pt);
         // }
-        // filteredMap->width = filteredMap->points.size();
-        // filteredMap->height = 1;
-        // filteredMap->is_dense = true;
 
-        // // [2] 저장
-        // pcl::io::savePCDFileASCII(savePCDDirectory + "cloudGlobal_2.pcd", *filteredMap);
+
+        // pcl::io::savePCDFileBinary(savePCDDirectory + "cloudGlobal_filtered.pcd", *filteredCloud);
+        // pcl::io::savePCDFileBinary(savePCDDirectory + "cloudGlobal.pcd", *filteredCloud2);
     }
 
     void allocateMemory()
@@ -456,7 +504,8 @@ public:
         laserCloudSurfLast.reset(new pcl::PointCloud<pcl::PointXYZRGB>()); // surf feature set from odoOptimization
         laserCloudCornerLastDS.reset(new pcl::PointCloud<pcl::PointXYZRGB>()); // downsampled corner featuer set from odoOptimization
         laserCloudSurfLastDS.reset(new pcl::PointCloud<pcl::PointXYZRGB>()); // downsampled surf featuer set from odoOptimization
-
+        fulllaserCloudCornerLastDS.reset(new pcl::PointCloud<pcl::PointXYZRGB>()); // downsampled corner featuer set from odoOptimization
+        fulllaserCloudSurfLastDS.reset(new pcl::PointCloud<pcl::PointXYZRGB>()); // downsampled surf featuer set from odoOptimization
         laserCloudOri.reset(new pcl::PointCloud<PointType>());
         coeffSel.reset(new pcl::PointCloud<PointType>());
 
@@ -539,7 +588,7 @@ public:
                           const auto &image = pair.second->get_cv_image();
                           std::string title = "/home/george/dataset/debug/"+std::to_string(imgidx)+".jpg";
                         //   std::cout<<title<<std::endl;
-                          cv::imwrite(title,image);
+                        //   cv::imwrite(title,image);
                         //   std::cout<<pair.first.c_str()<<" : "<<pair.second->get_projection_matrix()<<std::endl;
                           imgidx++;
                           if (image.type() != CV_8UC3)
@@ -550,9 +599,13 @@ public:
 
                           color_point_cloud::PointCloudConst cloud_corner{msgIn->cloud_corner};
                           rclcpp::Time lidar_time(msgIn->cloud_corner.header.stamp);
+                          rclcpp::Time lidar_time2(msgIn->header.stamp);
                           rclcpp::Time image_time(pair.second->get_compressed_image_msg()->header.stamp);
                           double time_diff = std::fabs((lidar_time - image_time).seconds());
                           double time_diff_cond = 1.1;
+                          std::cout<<std::fixed << std::setprecision(20)<<pair.first.c_str()<<" time : "<<lidar_time.seconds()<<", "<<image_time.seconds()<<", "<<time_diff<<std::endl;
+
+                        //   std::cout<<"time : "<<time_diff<<std::endl;
 
 #pragma omp parallel for num_threads(numberOfCores)
                           for (size_t i = 0; i < cloud_corner.getPointCount(); ++i) {
@@ -857,6 +910,33 @@ public:
         return thisPose6D;
     }
 
+    void saveOptimizedVerticesKITTIformat(gtsam::Values _estimates, std::string _filename)
+    {
+        using namespace gtsam;
+
+        // ref from gtsam's original code "dataset.cpp"
+        std::fstream stream(_filename.c_str(), fstream::out);
+
+        for (const auto &key_value : _estimates)
+        {
+            auto p = dynamic_cast<const GenericValue<Pose3> *>(&key_value.value);
+            if (!p)
+                continue;
+
+            const Pose3 &pose = p->value();
+
+            Point3 t = pose.translation();
+            Rot3 R = pose.rotation();
+            auto col1 = R.column(1); // Point3
+            auto col2 = R.column(2); // Point3
+            auto col3 = R.column(3); // Point3
+
+            stream << col1.x() << " " << col2.x() << " " << col3.x() << " " << t.x() << " "
+                   << col1.y() << " " << col2.y() << " " << col3.y() << " " << t.y() << " "
+                   << col1.z() << " " << col2.z() << " " << col3.z() << " " << t.z() << std::endl;
+        }
+    }
+
     void visualizeGlobalMapThread()
     {
         rclcpp::Rate rate(0.2);
@@ -866,6 +946,12 @@ public:
         }
         if (savePCD == false)
             return;
+
+        const std::string kitti_format_pg_filename {savePCDDirectory + "optimized_poses.txt"};
+        saveOptimizedVerticesKITTIformat(isamCurrentEstimate, kitti_format_pg_filename);   
+
+
+        
         // cout << "****************************************************" << endl;
         // cout << "Saving map to pcd files ..." << endl;
         // savePCDDirectory = savePCDDirectory;
@@ -1499,6 +1585,16 @@ public:
         downSizeFilterSurfRGB.setInputCloud(laserCloudSurfLast);
         downSizeFilterSurfRGB.filter(*laserCloudSurfLastDS);
         laserCloudSurfLastDSNum = laserCloudSurfLastDS->size();
+
+        fulllaserCloudCornerLastDS->clear();
+        downSizeFilterCornerRGB2.setInputCloud(laserCloudCornerLast);
+        downSizeFilterCornerRGB2.filter(*fulllaserCloudCornerLastDS);
+        // // laserCloudCornerLastDSNum = laserCloudCornerLastDS->size();
+
+        fulllaserCloudSurfLastDS->clear();
+        downSizeFilterSurfRGB2.setInputCloud(laserCloudSurfLast);
+        downSizeFilterSurfRGB2.filter(*fulllaserCloudSurfLastDS);
+        // laserCloudSurfLastDSNum = laserCloudSurfLastDS->size();
     }
 
     void updatePointAssociateToMap()
@@ -2118,9 +2214,27 @@ public:
         pcl::copyPointCloud(*laserCloudCornerLastDS,  *thisCornerKeyFrame);
         pcl::copyPointCloud(*laserCloudSurfLastDS,    *thisSurfKeyFrame);
 
+
+
         // save key frame cloud
         cornerCloudKeyFrames.push_back(thisCornerKeyFrame);
         surfCloudKeyFrames.push_back(thisSurfKeyFrame);
+
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr thisCornerKeyFrame2(new pcl::PointCloud<pcl::PointXYZRGB>());
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr thisSurfKeyFrame2(new pcl::PointCloud<pcl::PointXYZRGB>());
+        pcl::copyPointCloud(*fulllaserCloudCornerLastDS,  *thisCornerKeyFrame2);
+        pcl::copyPointCloud(*fulllaserCloudSurfLastDS,    *thisSurfKeyFrame2);
+        fullcornerCloudKeyFrames.push_back(thisCornerKeyFrame2);
+        fullsurfCloudKeyFrames.push_back(thisSurfKeyFrame2);
+
+
+
+        std::string curr_scd_node_idx = padZeros(cloudKeyPoses6D->size() - 1);
+
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr thisKeyFrameCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+        *thisKeyFrameCloud += *thisCornerKeyFrame;
+        *thisKeyFrameCloud += *thisSurfKeyFrame;
+        pcl::io::savePCDFileBinary(saveNodePCDDirectory + curr_scd_node_idx + ".pcd", *thisKeyFrameCloud);
 
         // save path for visualization
         updatePath(thisPose6D);

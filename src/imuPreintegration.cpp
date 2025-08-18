@@ -412,13 +412,13 @@ public:
             if (lastImuT_opt_ns < 0)
             {
                 // 초기 샘플: 센서 명시 주기 사용 (예: 200 Hz)
-                std::cout<<"?? : 1/200"<<std::endl;
-                dt = 1.0 / 200.0;
+                // std::cout<<"?? : 1/200"<<std::endl;
+                dt = 1.0 / 500.0;
             }
             else
             {
                 const int64_t d_ns = imu_ns - lastImuT_opt_ns;
-                std::cout<<std::fixed << std::setprecision(20)<<"odometry dt : "<<d_ns<<" = "<<imu_ns<<" - "<<lastImuT_opt_ns<<std::endl;
+                // std::cout<<std::fixed << std::setprecision(20)<<"odometry dt : "<<d_ns<<" = "<<imu_ns<<" - "<<lastImuT_opt_ns<<std::endl;
                 if (d_ns <= 0)
                 {
                     // 중복/역행 타임스탬프 스킵
@@ -427,7 +427,7 @@ public:
                 }
                 dt = nsToSec(d_ns);
             }
-            std::cout<<"odom handler dt : "<<dt<<std::endl;
+            // std::cout<<"odom handler dt : "<<dt<<std::endl;
 
             imuIntegratorOpt_->integrateMeasurement(
                 gtsam::Vector3(thisImu->linear_acceleration.x, thisImu->linear_acceleration.y, thisImu->linear_acceleration.z),
@@ -514,7 +514,7 @@ public:
             double dt;
             if (lastImuQT_ns < 0)
             {
-                dt = 1.0 / 200.0; // 초기 샘플
+                dt = 1.0 / 500.0; // 초기 샘플
             }
             else
             {
@@ -814,7 +814,7 @@ public:
     const int64_t imu_ns = toNSec(thisImu.header.stamp);
 
     // 샘플 주기(초) 기본값: 200 Hz -> 0.005 s
-    static constexpr double kInitialDt = 1.0 / 200.0;
+    static constexpr double kInitialDt = 1.0 / 500.0;
 
     // 이전 IMU 시간(ns) 보관 (함수-지역 static).
     // 클래스로 빼려면 멤버: int64_t lastImuT_imu_ns = -1; 로 선언.
@@ -823,7 +823,7 @@ public:
     double dt = kInitialDt;
     if (lastImuT_imu_ns >= 0) {
         const int64_t d_ns = imu_ns - lastImuT_imu_ns;
-        std::cout<<std::fixed << std::setprecision(20)<<"imu dt : "<<d_ns<<" = "<<imu_ns<<" - "<<lastImuT_imu_ns<<std::endl;
+        // std::cout<<std::fixed << std::setprecision(20)<<"imu dt : "<<d_ns<<" = "<<imu_ns<<" - "<<lastImuT_imu_ns<<std::endl;
         if (d_ns <= 0) {
             // 중복/역행 타임스탬프 -> 이 샘플 적분은 건너뜀 (원한다면 경고 로그 추가)
             // RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
