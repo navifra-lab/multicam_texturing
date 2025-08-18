@@ -1,36 +1,44 @@
-FROM osrf/ros:humble-desktop-full-jammy
+# ===== Base: Ubuntu 20.04 + ROS Noetic =====
+FROM osrf/ros:noetic-desktop-full
 
-RUN apt-get update \
-    && apt-get install -y curl \
-    && curl -s https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | apt-key add - \
-    && apt-get update \
-    && apt install -y python3-colcon-common-extensions \
-    && apt-get install -y ros-humble-navigation2 \
-    && apt-get install -y ros-humble-robot-localization \
-    && apt-get install -y ros-humble-robot-state-publisher \
-    && apt install -y ros-humble-perception-pcl \
-  	&& apt install -y ros-humble-pcl-msgs \
-  	&& apt install -y ros-humble-vision-opencv \
-  	&& apt install -y ros-humble-xacro \
+# Non-interactive apt
+ENV DEBIAN_FRONTEND=noninteractive
+SHELL ["/bin/bash", "-lc"]
+
+# 기본 유틸 + 개발 툴 (여기서는 gtsam 제외)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    sudo curl wget git vim nano \
+    build-essential cmake pkg-config \
+    software-properties-common \
+    python3-pip python3-venv python3-empy \
+    python3-rosdep python3-rosinstall python3-rosinstall-generator python3-vcstool \
+    libboost-all-dev libeigen3-dev libtbb-dev \
+ && rm -rf /var/lib/apt/lists/*
+
+# --- GTSAM 4.0.3 PPA 추가 및 설치 ---
+# PPA: borglab/gtsam-release-4.0.3  (focal용 4.0.3 빌드 제공)
+RUN apt-get update && \
+    add-apt-repository -y ppa:borglab/gtsam-release-4.0 && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        libgtsam-dev libgtsam-unstable-dev && \
+    # (선택) 이후 업그레이드로 버전이 바뀌지 않도록 고정
+    apt-mark hold libgtsam-dev libgtsam-unstable-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# rosdep 초기화 (컨테이너 안)
+RUN rosdep init || true && rosdep update
+
+# (옵션) catkin tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-noetic-catkin python3-catkin-tools \
     && rm -rf /var/lib/apt/lists/*
+    
+# 편의 alias
+RUN echo 'source /opt/ros/noetic/setup.bash' >> ~/.bashrc
 
-RUN apt-get update \
-    && apt install -y software-properties-common \
-    && add-apt-repository -y ppa:borglab/gtsam-release-4.1 \
-    && apt-get update \
-    && apt install -y libgtsam-dev libgtsam-unstable-dev \
-    && rm -rf /var/lib/apt/lists/*
 
+# 이후 레이어는 쉘을 일반 형태로 전환해도 OK
 SHELL ["/bin/bash", "-c"]
+WORKDIR /catkin_ws
 
-RUN mkdir -p ~/ros2_ws/src \
-    && cd ~/ros2_ws/src \
-    && git clone --branch ros2 https://github.com/TixiaoShan/LIO-SAM.git \
-    && cd .. \
-    && source /opt/ros/humble/setup.bash \
-    && colcon build
-
-RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc \
-    && echo "source /root/ros2_ws/install/setup.bash" >> /root/.bashrc
-
-WORKDIR /root/ros2_ws
