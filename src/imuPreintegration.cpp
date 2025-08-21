@@ -20,6 +20,13 @@ using gtsam::symbol_shorthand::X; // Pose3 (x,y,z,r,p,y)
 using gtsam::symbol_shorthand::V; // Vel   (xdot,ydot,zdot)
 using gtsam::symbol_shorthand::B; // Bias  (ax,ay,az,gx,gy,gz)
 
+inline int64_t toNSec(const ros::Time& t) {
+    return t.toNSec();                 // = (int64_t)t.sec*1e9 + t.nsec
+}
+inline double nsToSec(const int64_t ns) {
+    return static_cast<double>(ns) * 1e-9;
+}
+
 class TransformFusion : public ParamServer
 {
 public:
@@ -33,7 +40,7 @@ public:
 
     Eigen::Affine3f lidarOdomAffine;
     Eigen::Affine3f imuOdomAffineFront;
-    Eigen::Affine3f imuOdomAffineBack;
+    Eigen::Affine3f imuOdomAffineBack;    
 
     tf::TransformListener tfListener;
     tf::StampedTransform lidar2Baselink;
@@ -190,6 +197,8 @@ public:
     bool doneFirstOpt = false;
     double lastImuT_imu = -1;
     double lastImuT_opt = -1;
+    double imuHz = 500;
+
 
     gtsam::ISAM2 optimizer;
     gtsam::NonlinearFactorGraph graphFactors;
@@ -198,7 +207,7 @@ public:
     const double delta_t = 0;
 
     int key = 1;
-    
+
     // T_bl: tramsform points from lidar frame to imu frame 
     gtsam::Pose3 imu2Lidar = gtsam::Pose3(gtsam::Rot3(1, 0, 0, 0), gtsam::Point3(-extTrans.x(), -extTrans.y(), -extTrans.z()));
     // T_lb: tramsform points from imu frame to lidar frame
@@ -206,6 +215,8 @@ public:
 
     IMUPreintegration()
     {
+        imuHz = nh.param<double>("lio_sam/imuHz", imuHz, 500);
+
         subImu      = nh.subscribe<sensor_msgs::Imu>  (imuTopic,                   2000, &IMUPreintegration::imuHandler,      this, ros::TransportHints().tcpNoDelay());
         subOdometry = nh.subscribe<nav_msgs::Odometry>("lio_sam/mapping/odometry_incremental", 5,    &IMUPreintegration::odometryHandler, this, ros::TransportHints().tcpNoDelay());
 
@@ -253,7 +264,15 @@ public:
     {
         std::lock_guard<std::mutex> lock(mtx);
 
-        double currentCorrectionTime = ROS_TIME(odomMsg);
+        // double currentCorrectionTime = ROS_TIME(odomMsg);
+
+        const int64_t currentCorrectionTime_ns = odomMsg->header.stamp.toNSec();
+
+        static int64_t delta_t_ns = -1;
+        if (delta_t_ns < 0)
+        {
+            delta_t_ns = static_cast<int64_t>(delta_t * 1e9 + 0.5);
+        }
 
         // make sure we have imu data to integrate
         if (imuQueOpt.empty())
@@ -269,6 +288,8 @@ public:
         bool degenerate = (int)odomMsg->pose.covariance[0] == 1 ? true : false;
         gtsam::Pose3 lidarPose = gtsam::Pose3(gtsam::Rot3::Quaternion(r_w, r_x, r_y, r_z), gtsam::Point3(p_x, p_y, p_z));
 
+        static int64_t lastImuT_opt_ns = -1; 
+        static int64_t lastImuQT_ns = -1;   
 
         // 0. initialize system
         if (systemInitialized == false)
@@ -278,9 +299,10 @@ public:
             // pop old IMU message
             while (!imuQueOpt.empty())
             {
-                if (ROS_TIME(&imuQueOpt.front()) < currentCorrectionTime - delta_t)
+                const int64_t imu_ns = imuQueOpt.front().header.stamp.toNSec();
+                if (imu_ns < currentCorrectionTime_ns - delta_t_ns)
                 {
-                    lastImuT_opt = ROS_TIME(&imuQueOpt.front());
+                    lastImuT_opt_ns = imu_ns;
                     imuQueOpt.pop_front();
                 }
                 else
@@ -346,21 +368,35 @@ public:
             key = 1;
         }
 
-
-        // 1. integrate imu data and optimize
         while (!imuQueOpt.empty())
         {
-            // pop and integrate imu data that is between two optimizations
             sensor_msgs::Imu *thisImu = &imuQueOpt.front();
-            double imuTime = ROS_TIME(thisImu);
-            if (imuTime < currentCorrectionTime - delta_t)
+            const int64_t imu_ns = thisImu->header.stamp.toNSec();
+
+            if (imu_ns < currentCorrectionTime_ns - delta_t_ns)
             {
-                double dt = (lastImuT_opt < 0) ? (1.0 / 500.0) : (imuTime - lastImuT_opt);
+                double dt;
+                if (lastImuT_opt_ns < 0)
+                {
+                    dt = 1.0 / imuHz; 
+                }
+                else
+                {
+                    const int64_t d_ns = imu_ns - lastImuT_opt_ns;
+                    if (d_ns <= 0)
+                    {
+                        imuQueOpt.pop_front();
+                        continue;
+                    }
+                    dt = nsToSec(d_ns);
+                }
+
                 imuIntegratorOpt_->integrateMeasurement(
-                        gtsam::Vector3(thisImu->linear_acceleration.x, thisImu->linear_acceleration.y, thisImu->linear_acceleration.z),
-                        gtsam::Vector3(thisImu->angular_velocity.x,    thisImu->angular_velocity.y,    thisImu->angular_velocity.z), dt);
-                
-                lastImuT_opt = imuTime;
+                    gtsam::Vector3(thisImu->linear_acceleration.x, thisImu->linear_acceleration.y, thisImu->linear_acceleration.z),
+                    gtsam::Vector3(thisImu->angular_velocity.x, thisImu->angular_velocity.y, thisImu->angular_velocity.z), 
+                    dt);
+
+                lastImuT_opt_ns = imu_ns;
                 imuQueOpt.pop_front();
             }
             else
@@ -407,27 +443,41 @@ public:
         prevStateOdom = prevState_;
         prevBiasOdom  = prevBias_;
         // first pop imu message older than current correction data
-        double lastImuQT = -1;
-        while (!imuQueImu.empty() && ROS_TIME(&imuQueImu.front()) < currentCorrectionTime - delta_t)
+        lastImuQT_ns = -1;
+        while (!imuQueImu.empty() && imuQueImu.front().header.stamp.toNSec() < currentCorrectionTime_ns - delta_t_ns)
         {
-            lastImuQT = ROS_TIME(&imuQueImu.front());
+            lastImuQT_ns = imuQueImu.front().header.stamp.toNSec();
             imuQueImu.pop_front();
         }
-        // repropogate
+
         if (!imuQueImu.empty())
         {
-            // reset bias use the newly optimized bias
             imuIntegratorImu_->resetIntegrationAndSetBias(prevBiasOdom);
-            // integrate imu message from the beginning of this optimization
-            for (int i = 0; i < (int)imuQueImu.size(); ++i)
+
+            for (int i = 0; i < static_cast<int>(imuQueImu.size()); ++i)
             {
                 sensor_msgs::Imu *thisImu = &imuQueImu[i];
-                double imuTime = ROS_TIME(thisImu);
-                double dt = (lastImuQT < 0) ? (1.0 / 500.0) :(imuTime - lastImuQT);
+                const int64_t imu_ns = thisImu->header.stamp.toNSec();
 
-                imuIntegratorImu_->integrateMeasurement(gtsam::Vector3(thisImu->linear_acceleration.x, thisImu->linear_acceleration.y, thisImu->linear_acceleration.z),
-                                                        gtsam::Vector3(thisImu->angular_velocity.x,    thisImu->angular_velocity.y,    thisImu->angular_velocity.z), dt);
-                lastImuQT = imuTime;
+                double dt;
+                if (lastImuQT_ns < 0)
+                {
+                    dt = 1.0 / imuHz;
+                }
+                else
+                {
+                    const int64_t d_ns = imu_ns - lastImuQT_ns;
+                    if (d_ns <= 0)
+                        continue;
+                    dt = nsToSec(d_ns);
+                }
+
+                imuIntegratorImu_->integrateMeasurement(
+                    gtsam::Vector3(thisImu->linear_acceleration.x, thisImu->linear_acceleration.y, thisImu->linear_acceleration.z),
+                    gtsam::Vector3(thisImu->angular_velocity.x, thisImu->angular_velocity.y, thisImu->angular_velocity.z),
+                    dt);
+
+                lastImuQT_ns = imu_ns;
             }
         }
 
@@ -467,9 +517,25 @@ public:
         if (doneFirstOpt == false)
             return;
 
-        double imuTime = ROS_TIME(&thisImu);
-        double dt = (lastImuT_imu < 0) ? (1.0 / 500.0) : (imuTime - lastImuT_imu);
-        lastImuT_imu = imuTime;
+        const int64_t imu_ns = thisImu.header.stamp.toNSec();
+
+        static double kInitialDt = 1.0 / imuHz;
+
+        static int64_t lastImuT_imu_ns = -1;
+
+        double dt = kInitialDt;
+        if (lastImuT_imu_ns >= 0)
+        {
+            const int64_t d_ns = imu_ns - lastImuT_imu_ns;
+            // std::cout<<std::fixed << std::setprecision(20)<<"imu dt : "<<d_ns<<" = "<<imu_ns<<" - "<<lastImuT_imu_ns<<std::endl;
+            if (d_ns <= 0)
+            {
+                lastImuT_imu_ns = imu_ns;
+                return;
+            }
+            dt = nsToSec(d_ns);
+        }
+        lastImuT_imu_ns = imu_ns;
 
         // integrate this single imu message
         imuIntegratorImu_->integrateMeasurement(gtsam::Vector3(thisImu.linear_acceleration.x, thisImu.linear_acceleration.y, thisImu.linear_acceleration.z),

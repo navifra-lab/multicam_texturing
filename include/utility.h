@@ -122,7 +122,8 @@ public:
     // voxel filter paprams
     float odometrySurfLeafSize;
     float mappingCornerLeafSize;
-    float mappingSurfLeafSize ;
+    float mappingSurfLeafSize;
+    float saveLeafSize;
 
     float z_tollerance; 
     float rotation_tollerance;
@@ -150,6 +151,10 @@ public:
     float globalMapVisualizationSearchRadius;
     float globalMapVisualizationPoseDensity;
     float globalMapVisualizationLeafSize;
+
+    std::vector<std::string> cameraTopics;
+    std::string imageTopicLastName;
+    std::string cameraInfoTopicLastName;
 
     ParamServer()
     {
@@ -212,7 +217,8 @@ public:
         extRot = Eigen::Map<const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>>(extRotV.data(), 3, 3);
         extRPY = Eigen::Map<const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>>(extRPYV.data(), 3, 3);
         extTrans = Eigen::Map<const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>>(extTransV.data(), 3, 1);
-        extQRPY = Eigen::Quaterniond(extRPY).inverse();
+        // extQRPY = Eigen::Quaterniond(extRPY).inverse();
+        extQRPY = Eigen::Quaterniond(extRPY);
 
         nh.param<float>("lio_sam/edgeThreshold", edgeThreshold, 0.1);
         nh.param<float>("lio_sam/surfThreshold", surfThreshold, 0.1);
@@ -222,6 +228,7 @@ public:
         nh.param<float>("lio_sam/odometrySurfLeafSize", odometrySurfLeafSize, 0.2);
         nh.param<float>("lio_sam/mappingCornerLeafSize", mappingCornerLeafSize, 0.2);
         nh.param<float>("lio_sam/mappingSurfLeafSize", mappingSurfLeafSize, 0.2);
+        nh.param<float>("lio_sam/saveLeafSize", saveLeafSize, 0.2);
 
         nh.param<float>("lio_sam/z_tollerance", z_tollerance, FLT_MAX);
         nh.param<float>("lio_sam/rotation_tollerance", rotation_tollerance, FLT_MAX);
@@ -245,6 +252,10 @@ public:
         nh.param<float>("lio_sam/globalMapVisualizationSearchRadius", globalMapVisualizationSearchRadius, 1e3);
         nh.param<float>("lio_sam/globalMapVisualizationPoseDensity", globalMapVisualizationPoseDensity, 10.0);
         nh.param<float>("lio_sam/globalMapVisualizationLeafSize", globalMapVisualizationLeafSize, 1.0);
+
+        nh.param<vector<std::string>>("lio_sam/cameraTopics", cameraTopics, vector<std::string>());
+        nh.param<std::string>("lio_sam/imageTopicLastName", imageTopicLastName, "image_raw");
+        nh.param<std::string>("lio_sam/cameraInfoTopicLastName", cameraInfoTopicLastName, "camera_info");
 
         usleep(100);
     }
@@ -342,6 +353,12 @@ float pointDistance(PointType p)
 float pointDistance(PointType p1, PointType p2)
 {
     return sqrt((p1.x-p2.x)*(p1.x-p2.x) + (p1.y-p2.y)*(p1.y-p2.y) + (p1.z-p2.z)*(p1.z-p2.z));
+}
+
+std::string padZeros(int val, int num_digits = 6) {
+  std::ostringstream out;
+  out << std::internal << std::setfill('0') << std::setw(num_digits) << val;
+  return out.str();
 }
 
 #endif
