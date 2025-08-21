@@ -83,8 +83,6 @@ public:
     std::deque<nav_msgs::Odometry> gpsQueue;
     lio_sam::cloud_info cloudInfo;
 
-    // vector<pcl::PointCloud<PointType>::Ptr> cornerCloudKeyFrames;
-    // vector<pcl::PointCloud<PointType>::Ptr> surfCloudKeyFrames;
     vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> cornerCloudKeyFrames;
     vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> surfCloudKeyFrames;
     vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> fullcornerCloudKeyFrames;
@@ -95,10 +93,6 @@ public:
     pcl::PointCloud<PointType>::Ptr copy_cloudKeyPoses3D;
     pcl::PointCloud<PointTypePose>::Ptr copy_cloudKeyPoses6D;
 
-    // pcl::PointCloud<PointType>::Ptr laserCloudCornerLast; // corner feature set from odoOptimization
-    // pcl::PointCloud<PointType>::Ptr laserCloudSurfLast; // surf feature set from odoOptimization
-    // pcl::PointCloud<PointType>::Ptr laserCloudCornerLastDS; // downsampled corner feature set from odoOptimization
-    // pcl::PointCloud<PointType>::Ptr laserCloudSurfLastDS; // downsampled surf feature set from odoOptimization
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr laserCloudCornerLast;       // corner feature set from odoOptimization
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr laserCloudSurfLast;         // surf feature set from odoOptimization
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr laserCloudCornerLastDS;     // downsampled corner feature set from odoOptimization
@@ -242,24 +236,48 @@ public:
         if (std::isfinite(t_back) && lidar_time > t_back + kInitMatchThreshSec)
             return nullptr;
 
-        size_t best_idx = 0;
-        auto m0 = cam->buf_at(0);
-        if (!m0)
-            return nullptr;
-        double best_abs = std::fabs(m0->header.stamp.toSec() - lidar_time);
-        for (size_t i = 1; i < cam->buf_size(); ++i)
+        size_t n = cam->buf_size();
+        size_t idx_ge = n; // first index with t >= lidar_time
+
+        for (size_t i = 0; i < n; ++i)
         {
             auto mi = cam->buf_at(i);
             if (!mi)
                 break;
+            double t = mi->header.stamp.toSec();
+            if (t >= lidar_time)
+            {
+                idx_ge = i;
+                break;
+            }
+        }
+
+        size_t cand0 = (idx_ge > 0) ? (idx_ge - 1) : n;
+        size_t cand1 = (idx_ge < n) ? idx_ge : n;      
+
+        size_t best_idx = n;
+        double best_abs = std::numeric_limits<double>::infinity();
+
+        auto consider = [&](size_t i)
+        {
+            if (i >= n)
+                return;
+            auto mi = cam->buf_at(i);
+            if (!mi)
+                return;
             double d = std::fabs(mi->header.stamp.toSec() - lidar_time);
-            if (d < best_abs)
+            double ti = mi->header.stamp.toSec();
+            if (d < best_abs || (d == best_abs && ti <= lidar_time))
             {
                 best_abs = d;
                 best_idx = i;
             }
-        }
-        if (best_abs > kInitMatchThreshSec)
+        };
+
+        consider(cand0);
+        consider(cand1);
+
+        if (!std::isfinite(best_abs) || best_abs > kInitMatchThreshSec)
             return nullptr;
 
         auto out = cam->buf_at(best_idx);
@@ -298,6 +316,36 @@ public:
     //     return out;
     // }
 
+    // sensor_msgs::CompressedImageConstPtr popNextFIFO(const std::string &cam_key, double lidar_time)
+    // {
+    //     std::lock_guard<std::mutex> lk(cam_mtx_[cam_key]);
+    //     auto &st = cam_states_[cam_key];
+    //     auto cam = camera_type_stdmap_[cam_key];
+    //     if (!cam)
+    //         return nullptr;
+
+    //     const double target = lidar_time + st.phase_offset;
+
+    //     while (cam->buf_size() >= 2)
+    //     {
+    //         auto f0 = cam->buf_at(0);
+    //         auto f1 = cam->buf_at(1);
+    //         if (!f0 || !f1)
+    //             break;
+    //         double d0 = std::fabs(f0->header.stamp.toSec() - target);
+    //         double d1 = std::fabs(f1->header.stamp.toSec() - target);
+    //         if (d1 <= d0)
+    //             cam->pop_front_one(); 
+    //         else
+    //             break;
+    //     }
+
+    //     auto out = cam->pop_front_one();
+    //     if (out)
+    //         st.last_img_time = out->header.stamp.toSec();
+    //     return out;
+    // }
+
     sensor_msgs::CompressedImageConstPtr popNextFIFO(const std::string &cam_key, double lidar_time)
     {
         std::lock_guard<std::mutex> lk(cam_mtx_[cam_key]);
@@ -308,16 +356,32 @@ public:
 
         const double target = lidar_time + st.phase_offset;
 
-        while (cam->buf_size() >= 2)
+        // Fast path: 맨 앞 프레임이 충분히 가까우면 바로 소비
+        if (cam->buf_size() >= 1)
         {
             auto f0 = cam->buf_at(0);
-            auto f1 = cam->buf_at(1);
+            if (f0)
+            {
+                double e0 = std::fabs(f0->header.stamp.toSec() - target);
+                if (e0 <= kUseThreshSec)
+                {
+                    auto out = cam->pop_front_one();
+                    st.last_img_time = out->header.stamp.toSec();
+                    return out;
+                }
+            }
+        }
+
+        // Fallback: 앞 두 장만 비교해 더 가까워지면 한 장 버림
+        while (cam->buf_size() >= 2)
+        {
+            auto f0 = cam->buf_at(0), f1 = cam->buf_at(1);
             if (!f0 || !f1)
                 break;
             double d0 = std::fabs(f0->header.stamp.toSec() - target);
             double d1 = std::fabs(f1->header.stamp.toSec() - target);
             if (d1 <= d0)
-                cam->pop_front_one(); 
+                cam->pop_front_one();
             else
                 break;
         }
