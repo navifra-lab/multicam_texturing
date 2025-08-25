@@ -22,10 +22,12 @@ public:
     ros::Publisher pubLaserCloudInfo;
     ros::Publisher pubCornerPoints;
     ros::Publisher pubSurfacePoints;
+    ros::Publisher pubGoodPoints;
 
     pcl::PointCloud<PointType>::Ptr extractedCloud;
     pcl::PointCloud<PointType>::Ptr cornerCloud;
     pcl::PointCloud<PointType>::Ptr surfaceCloud;
+    pcl::PointCloud<PointType>::Ptr goodCloud;
 
     pcl::VoxelGrid<PointType> downSizeFilter;
 
@@ -44,6 +46,9 @@ public:
         pubLaserCloudInfo = nh.advertise<lio_sam::cloud_info> ("lio_sam/feature/cloud_info", 1);
         pubCornerPoints = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/feature/cloud_corner", 1);
         pubSurfacePoints = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/feature/cloud_surface", 1);
+        pubGoodPoints = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/feature/cloud_good", 1);
+
+
         
         initializationValue();
     }
@@ -57,6 +62,7 @@ public:
         extractedCloud.reset(new pcl::PointCloud<PointType>());
         cornerCloud.reset(new pcl::PointCloud<PointType>());
         surfaceCloud.reset(new pcl::PointCloud<PointType>());
+        goodCloud.reset(new pcl::PointCloud<PointType>());
 
         cloudCurvature = new float[N_SCAN*Horizon_SCAN];
         cloudNeighborPicked = new int[N_SCAN*Horizon_SCAN];
@@ -72,6 +78,8 @@ public:
         calculateSmoothness();
 
         markOccludedPoints();
+
+        buildGoodPointsCloud();
 
         extractFeatures();
 
@@ -135,6 +143,22 @@ public:
 
             if (diff1 > 0.02 * cloudInfo.pointRange[i] && diff2 > 0.02 * cloudInfo.pointRange[i])
                 cloudNeighborPicked[i] = 1;
+        }
+    }
+
+    void buildGoodPointsCloud()
+    {
+        goodCloud->clear();
+        const int cloudSize = extractedCloud->points.size();
+
+        for (int i = 5; i < cloudSize - 6; ++i)
+        {
+            if (cloudNeighborPicked[i] == 0)
+            {
+                const auto &p = extractedCloud->points[i];
+                if (pcl::isFinite(p))
+                    goodCloud->push_back(p);
+            }
         }
     }
 
@@ -252,6 +276,8 @@ public:
         // save newly extracted features
         cloudInfo.cloud_corner  = publishCloud(pubCornerPoints,  cornerCloud,  cloudHeader.stamp, lidarFrame);
         cloudInfo.cloud_surface = publishCloud(pubSurfacePoints, surfaceCloud, cloudHeader.stamp, lidarFrame);
+        cloudInfo.cloud_good = publishCloud(pubGoodPoints, goodCloud, cloudHeader.stamp, lidarFrame);
+
         // publish to mapOptimization
         pubLaserCloudInfo.publish(cloudInfo);
     }

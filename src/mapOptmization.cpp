@@ -87,6 +87,8 @@ public:
     vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> surfCloudKeyFrames;
     vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> fullcornerCloudKeyFrames;
     vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> fullsurfCloudKeyFrames;
+    vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> rawCloudKeyFrames;
+    
 
     pcl::PointCloud<PointType>::Ptr cloudKeyPoses3D;
     pcl::PointCloud<PointTypePose>::Ptr cloudKeyPoses6D;
@@ -99,6 +101,7 @@ public:
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr laserCloudSurfLastDS;       // downsampled surf feature set from odoOptimization
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr fulllaserCloudCornerLastDS; // downsampled corner feature set from odoOptimization
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr fulllaserCloudSurfLastDS;   // downsampled surf feature set from odoOptimization
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr laserCloudRawLast;
 
     pcl::PointCloud<PointType>::Ptr laserCloudOri;
     pcl::PointCloud<PointType>::Ptr coeffSel;
@@ -553,6 +556,7 @@ public:
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalCornerCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalSurfCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalMapCloud2(new pcl::PointCloud<pcl::PointXYZRGB>());
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr globalRawCloud(new pcl::PointCloud<pcl::PointXYZRGB>());
 
         size_t saveThreshold = 5000000;
         size_t fileIndex = 0;
@@ -562,12 +566,14 @@ public:
         {
             // *globalCornerCloud += *transformPointCloud(fullcornerCloudKeyFrames[i], &cloudKeyPoses6D->points[i]);
             // *globalSurfCloud += *transformPointCloud(fullsurfCloudKeyFrames[i], &cloudKeyPoses6D->points[i]);
-            *globalCornerCloud += *transformPointCloud(cornerCloudKeyFrames[i], &cloudKeyPoses6D->points[i]);
-            *globalSurfCloud += *transformPointCloud(surfCloudKeyFrames[i], &cloudKeyPoses6D->points[i]);
+            // *globalCornerCloud += *transformPointCloud(cornerCloudKeyFrames[i], &cloudKeyPoses6D->points[i]);
+            // *globalSurfCloud += *transformPointCloud(surfCloudKeyFrames[i], &cloudKeyPoses6D->points[i]);
+            *globalRawCloud += *transformPointCloud(rawCloudKeyFrames[i], &cloudKeyPoses6D->points[i]);
 
             cout << "\r" << std::flush << "Processing feature cloud " << i << " of " << cloudKeyPoses6D->size() << " ...";
 
-            *globalMapCloud2 = *globalCornerCloud + *globalSurfCloud;
+            // *globalMapCloud2 = *globalCornerCloud + *globalSurfCloud;
+            *globalMapCloud2 = *globalRawCloud;
 
             for (const auto &pt : globalMapCloud2->points)
             {
@@ -583,8 +589,9 @@ public:
                 chunkCloud->clear();
             }
 
-            globalCornerCloud->clear();
-            globalSurfCloud->clear();
+            // globalCornerCloud->clear();
+            // globalSurfCloud->clear();
+            globalRawCloud->clear();
             globalMapCloud2->clear();
         }
 
@@ -615,6 +622,7 @@ public:
         laserCloudSurfLastDS.reset(new pcl::PointCloud<pcl::PointXYZRGB>());       // downsampled surf featuer set from odoOptimization
         fulllaserCloudCornerLastDS.reset(new pcl::PointCloud<pcl::PointXYZRGB>()); // downsampled corner featuer set from odoOptimization
         fulllaserCloudSurfLastDS.reset(new pcl::PointCloud<pcl::PointXYZRGB>());   // downsampled surf featuer set from odoOptimization
+        laserCloudRawLast.reset(new pcl::PointCloud<pcl::PointXYZRGB>());
 
         laserCloudOri.reset(new pcl::PointCloud<PointType>());
         coeffSel.reset(new pcl::PointCloud<PointType>());
@@ -657,9 +665,10 @@ public:
 
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr corner_accum(new pcl::PointCloud<pcl::PointXYZRGB>());
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr surf_accum(new pcl::PointCloud<pcl::PointXYZRGB>());
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr raw_accum(new pcl::PointCloud<pcl::PointXYZRGB>());
 
         std::for_each(camera_type_stdmap_.begin(), camera_type_stdmap_.end(),
-                      [this, msgIn, lidar_time, &corner_accum, &surf_accum](const auto &pair)
+                      [this, msgIn, lidar_time, &corner_accum, &surf_accum, &raw_accum](const auto &pair)
                       {
                           const std::string cam_key = pair.first;
                           auto &cam = pair.second;
@@ -781,6 +790,59 @@ public:
                               }
                               surf_accum->points.insert(surf_accum->points.end(), out.begin(), out.end());
                           }
+
+                          // ------- raw -------
+                          {
+                              color_point_cloud::PointCloudConst cloud_good{msgIn->cloud_good};
+                              std::vector<color_point_cloud::Point> pts;
+                              pts.reserve(cloud_good.getPointCount());
+                              for (size_t i = 0; i < cloud_good.getPointCount(); ++i)
+                              {
+                                  pts.emplace_back(cloud_good.getCurrentPoint());
+                                  cloud_good.nextPoint();
+                              }
+
+                              std::vector<pcl::PointXYZRGB> out;
+                              out.reserve(pts.size());
+
+#pragma omp parallel
+                              {
+                                  std::vector<pcl::PointXYZRGB> local;
+                                  local.reserve(1024);
+
+#pragma omp for nowait
+                                  for (int i = 0; i < static_cast<int>(pts.size()); ++i)
+                                  {
+                                      const auto &p = pts[i];
+                                      Eigen::Vector4d p4(p.x, p.y, p.z, 1.0);
+                                      Eigen::Vector3d pc = P * p4;
+                                      const double z = pc[2];
+                                      if (z <= 1e-6)
+                                          continue;
+
+                                      const int xi = static_cast<int>(std::round(pc[0] / z));
+                                      const int yi = static_cast<int>(std::round(pc[1] / z));
+                                      if (xi < 0 || yi < 0 || xi >= W || yi >= H)
+                                          continue;
+
+                                      const cv::Vec3b c = image.at<cv::Vec3b>(yi, xi);
+                                      pcl::PointXYZRGB q;
+                                      q.x = p.x;
+                                      q.y = p.y;
+                                      q.z = p.z;
+                                      q.r = c[2];
+                                      q.g = c[1];
+                                      q.b = c[0];
+                                      local.push_back(q);
+                                  }
+
+#pragma omp critical
+                                  out.insert(out.end(), local.begin(), local.end());
+                              }
+                              raw_accum->points.insert(raw_accum->points.end(), out.begin(), out.end());
+                          }
+
+                          
                       });
 
         if (corner_accum->points.empty() || surf_accum->points.empty())
@@ -798,6 +860,12 @@ public:
             laserCloudSurfLast->width = laserCloudSurfLast->points.size();
             laserCloudSurfLast->height = 1;
             laserCloudSurfLast->is_dense = false;
+
+            
+            laserCloudRawLast->points.swap(raw_accum->points);
+            laserCloudRawLast->width = laserCloudSurfLast->points.size();
+            laserCloudRawLast->height = 1;
+            laserCloudRawLast->is_dense = false;
 
             // std::string filename = "/dataset/ros1/ply/corner/" + std::to_string(imgidx) + ".pcd";
             // pcl::io::savePCDFileBinary(filename, *laserCloudCornerLast);
@@ -2177,9 +2245,14 @@ public:
         pcl::copyPointCloud(*laserCloudCornerLastDS, *thisCornerKeyFrame);
         pcl::copyPointCloud(*laserCloudSurfLastDS, *thisSurfKeyFrame);
 
+        
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr thisRawKeyFrame(new pcl::PointCloud<pcl::PointXYZRGB>());
+        pcl::copyPointCloud(*laserCloudRawLast, *thisRawKeyFrame);
+
         // save key frame cloud
         cornerCloudKeyFrames.push_back(thisCornerKeyFrame);
         surfCloudKeyFrames.push_back(thisSurfKeyFrame);
+        rawCloudKeyFrames.push_back(thisRawKeyFrame);
 
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr thisCornerKeyFrame2(new pcl::PointCloud<pcl::PointXYZRGB>());
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr thisSurfKeyFrame2(new pcl::PointCloud<pcl::PointXYZRGB>());
