@@ -7,6 +7,13 @@ lio_sam:
     gpsTopic: "/sensing/gnss/clap/ros/odometry"                   # GPS odometry topic from navsat, see module_navsat.launch file
     imuHz: 500
 
+    # multi lidar
+    multilidar: false
+    pointCloudTopic2: "vrt/points"
+    approxSlop: 0.03
+    ring_offset_second: 0
+    relativePose: [-0.18999, 0.01, -0.04106, -0.0052607, -0.6457535, 3.1328512]
+    
     # Frames
     lidarFrame: "os_lidar"
     baselinkFrame: "base_link" 
@@ -99,10 +106,11 @@ lio_sam:
     globalMapVisualizationLeafSize: 0.4           # meters, global map visualization cloud density
 
     #Color Cloud
-    cameraTopics: ["/camera_3/","/camera_2/","/camera_1/"]
+    cameraTopics: ["/camera_3/","/camera_2/","/camera_1/","/camera_0/"]
     imageTopicLastName: "image_rect/compressed"
     cameraInfoTopicLastName: "camera_info"
 
+    #cam1-1
     /camera_3/:
      frame_id: "camera_3_frame"
      width: 1920
@@ -116,7 +124,8 @@ lio_sam:
      roll: 0.1431548
      pitch: -1.491443
      yaw: 1.4271958  
-  
+     
+    #cam1-2
     /camera_2/:
      frame_id: "camera_2_frame"
      width: 1920
@@ -130,7 +139,8 @@ lio_sam:
      roll: 1.5515975
      pitch: 0.0139626
      yaw: 0.0
-     
+
+    #cam1-4 
     /camera_1/:
      frame_id: "camera_1_frame"
      width: 1920
@@ -144,6 +154,23 @@ lio_sam:
      roll: -1.5484562
      pitch: -0.0139626
      yaw: 3.132866
+
+
+    #cam1-3
+    /camera_0/:
+     frame_id: "camera_0_frame"
+     width: 1920
+     height: 1200
+     K: [874.9507060886988, 0.0, 942.9809828038187, 0.0, 872.6241208542509, 589.2538081803823, 0.0, 0.0, 1.0]
+     D: [0.0, 0.0, 0.0, 0.0]
+     P: [874.9507060886988,0.0,872.6241208542509,0.0,0.0,942.9809828038187,589.2538081803823,0.0,0.0,0.0,1.0,0.0]
+     x: 0.0085
+     y: -0.1517
+     z: -0.2199
+     roll: -2.3827559
+     pitch: 1.5568481
+     yaw: 2.3296817
+
 
 
 

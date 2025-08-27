@@ -156,6 +156,12 @@ public:
     std::string imageTopicLastName;
     std::string cameraInfoTopicLastName;
 
+    bool  multilidar;
+    std::string pointCloudTopic2;
+    float approxSlop;
+    int ringOffsetSecond;
+    vector<double> relativePose;
+
     ParamServer()
     {
         nh.param<std::string>("/robot_id", robot_id, "roboat");
@@ -164,6 +170,12 @@ public:
         nh.param<std::string>("lio_sam/imuTopic", imuTopic, "imu_correct");
         nh.param<std::string>("lio_sam/odomTopic", odomTopic, "odometry/imu");
         nh.param<std::string>("lio_sam/gpsTopic", gpsTopic, "odometry/gps");
+
+        nh.param<bool>("lio_sam/multilidar", multilidar, false);
+        nh.param<std::string>("lio_sam/pointCloudTopic2", pointCloudTopic2, "points_raw2");
+        nh.param<float>("lio_sam/approxSlop", approxSlop, 0.03);
+        nh.param<int>("lio_sam/ring_offset_second", ringOffsetSecond, 0);
+        nh.param<vector<double>>("lio_sam/relativePose", relativePose, vector<double>());
 
         nh.param<std::string>("lio_sam/lidarFrame", lidarFrame, "base_link");
         nh.param<std::string>("lio_sam/baselinkFrame", baselinkFrame, "base_link");

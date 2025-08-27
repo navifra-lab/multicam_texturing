@@ -2,9 +2,11 @@
 
     <arg name="project" default="lio_sam"/>
     <node pkg="tf" type="static_transform_publisher" name="base_to_lidar" args="0 0 0 0 0 0 1 base_link os_lidar 100" />
+    <node pkg="tf" type="static_transform_publisher" name="oslidar_to_cam0" args="0.0085 -0.1517 -0.2199  -2.3827559 1.5568481 2.3296817  os_lidar camera_0_frame 100"/>
     <node pkg="tf" type="static_transform_publisher" name="oslidar_to_cam1" args="0.0049 -0.1505 -0.221  3.132866 -0.0139626 -1.5484562  os_lidar camera_1_frame 100"/>
     <node pkg="tf" type="static_transform_publisher" name="oslidar_to_cam2" args="0.0031 -0.1523 -0.2198  0 0.0139626 1.5515975  os_lidar camera_2_frame 100"/>
     <node pkg="tf" type="static_transform_publisher" name="oslidar_to_cam3" args="0.0 -0.1446 -0.2264  1.4271958 -1.491443 0.1431548  os_lidar camera_3_frame 100"/>
+    
 
     
     <node pkg="$(arg project)" type="$(arg project)_imuPreintegration"   name="$(arg project)_imuPreintegration"    output="screen" 	respawn="true"/>

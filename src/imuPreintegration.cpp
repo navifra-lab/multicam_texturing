@@ -57,7 +57,7 @@ public:
                 tfListener.waitForTransform(lidarFrame, baselinkFrame, ros::Time(0), ros::Duration(3.0));
                 tfListener.lookupTransform(lidarFrame, baselinkFrame, ros::Time(0), lidar2Baselink);
             }
-            catch (tf::TransformException ex)
+            catch (tf::TransformException& ex)
             {
                 ROS_ERROR("%s",ex.what());
             }
@@ -444,7 +444,7 @@ public:
         prevBiasOdom  = prevBias_;
         // first pop imu message older than current correction data
         lastImuQT_ns = -1;
-        while (!imuQueImu.empty() && imuQueImu.front().header.stamp.toNSec() < currentCorrectionTime_ns - delta_t_ns)
+        while (!imuQueImu.empty() && imuQueImu.front().header.stamp.toNSec() < static_cast<uint64_t>(currentCorrectionTime_ns - delta_t_ns))
         {
             lastImuQT_ns = imuQueImu.front().header.stamp.toNSec();
             imuQueImu.pop_front();
