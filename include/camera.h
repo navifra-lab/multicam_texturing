@@ -285,6 +285,7 @@ private:
 
     bool is_info_initialized_;
     bool is_transform_initialized_;
+    bool is_map_initialized_;
 
     std::string camera_frame_id_;
     std::string distortion_model_;
@@ -304,7 +305,6 @@ private:
     Eigen::Matrix<double,3,4> lidar_to_camera_projection_matrix_;
 
     cv::Mat map1, map2;
-    bool is_map_initialized_;
 
     mutable std::mutex buf_mtx_;
     std::deque<sensor_msgs::CompressedImageConstPtr> compressed_buffer_;

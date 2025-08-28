@@ -9,10 +9,10 @@ lio_sam:
 
     # multi lidar
     multilidar: false
-    pointCloudTopic2: "vrt/points"
+    pointCloudTopic2: "/vrt/points"
     approxSlop: 0.03
     ring_offset_second: 0
-    relativePose: [-0.18999, 0.01, -0.04106, -0.0052607, -0.6457535, 3.1328512]
+    relativePose: [-0.17639, 0.01226, -0.08135, -0.025043, 0.645714, 3.1229324]  #ZYX
     
     # Frames
     lidarFrame: "os_lidar"

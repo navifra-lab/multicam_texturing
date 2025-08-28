@@ -627,12 +627,16 @@ public:
         laserCloudOri.reset(new pcl::PointCloud<PointType>());
         coeffSel.reset(new pcl::PointCloud<PointType>());
 
-        laserCloudOriCornerVec.resize(N_SCAN * Horizon_SCAN);
-        coeffSelCornerVec.resize(N_SCAN * Horizon_SCAN);
-        laserCloudOriCornerFlag.resize(N_SCAN * Horizon_SCAN);
-        laserCloudOriSurfVec.resize(N_SCAN * Horizon_SCAN);
-        coeffSelSurfVec.resize(N_SCAN * Horizon_SCAN);
-        laserCloudOriSurfFlag.resize(N_SCAN * Horizon_SCAN);
+        int sizeNum = N_SCAN * Horizon_SCAN;
+        if (multilidar)
+            sizeNum *= 2;
+
+        laserCloudOriCornerVec.resize(sizeNum);
+        coeffSelCornerVec.resize(sizeNum);
+        laserCloudOriCornerFlag.resize(sizeNum);
+        laserCloudOriSurfVec.resize(sizeNum);
+        coeffSelSurfVec.resize(sizeNum);
+        laserCloudOriSurfFlag.resize(sizeNum);
 
         std::fill(laserCloudOriCornerFlag.begin(), laserCloudOriCornerFlag.end(), false);
         std::fill(laserCloudOriSurfFlag.begin(), laserCloudOriSurfFlag.end(), false);
@@ -2429,7 +2433,7 @@ public:
             pubPath.publish(globalPath);
         }
         // publish SLAM infomation for 3rd-party usage
-        static int lastSLAMInfoPubSize = -1;
+        static size_t lastSLAMInfoPubSize = -1;
         if (pubSLAMInfo.getNumSubscribers() != 0)
         {
             if (lastSLAMInfoPubSize != cloudKeyPoses6D->size())

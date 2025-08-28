@@ -1,22 +1,8 @@
     #include "utility.h"
     #include "lio_sam/cloud_info.h"
-    // 추가 include
     #include <message_filters/subscriber.h>
     #include <message_filters/synchronizer.h>
     #include <message_filters/sync_policies/approximate_time.h>
-
-    #include <tf2_ros/transform_listener.h>
-    #include <tf2_ros/buffer.h>
-
-    #include <pcl_conversions/pcl_conversions.h>
-    #include <pcl/PCLPointCloud2.h>
-    #include <pcl/common/io.h>  // pcl::concatenatePointCloud
-    #include <pcl/common/transforms.h>
-    #include <Eigen/Geometry>
-    #include <pcl/common/io.h>          // getFieldIndex
-    #include <pcl/point_cloud.h>        // 구조체들
-    #include <cstring>
-
 
     struct VelodynePointXYZIRT
     {
@@ -65,6 +51,9 @@
         ros::Publisher pubExtractedCloud;
         ros::Publisher pubLaserCloudInfo;
 
+        ros::Publisher pubExtractedCloud1, pubExtractedCloud2;
+        ros::Publisher pubLaserCloudInfo1, pubLaserCloudInfo2;
+
         ros::Subscriber subImu;
         std::deque<sensor_msgs::Imu> imuQueue;
 
@@ -103,17 +92,9 @@
 
         vector<int> columnIdnCountVec;
 
-        bool dualLidar{false};
-        std::string lidar2Topic;
-        std::string mergeTargetFrame; // 합칠 목표 프레임 (예: lidarFrame 또는 cloud frame)
-        double approxSlop{0.03};
-        int ringOffsetSecond{0};
-
-        // TF
         tf2_ros::Buffer tfBuffer;
         tf2_ros::TransformListener tfListener{tfBuffer};
 
-        // message_filters (듀얼일 때만 사용)
         using PC2 = sensor_msgs::PointCloud2;
         using ApproxPolicy = message_filters::sync_policies::ApproximateTime<PC2, PC2>;
         std::unique_ptr<message_filters::Subscriber<PC2>> subCloud1, subCloud2;
@@ -124,26 +105,32 @@
         {
             subImu        = nh.subscribe<sensor_msgs::Imu>(imuTopic, 2000, &ImageProjection::imuHandler, this, ros::TransportHints().tcpNoDelay());
             subOdom       = nh.subscribe<nav_msgs::Odometry>(odomTopic+"_incremental", 2000, &ImageProjection::odometryHandler, this, ros::TransportHints().tcpNoDelay());
-            // subLaserCloud = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic, 5, &ImageProjection::cloudHandler, this, ros::TransportHints().tcpNoDelay());
 
             if (!multilidar)
             {
-                subLaserCloud = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic, 5, &ImageProjection::cloudHandler, this, ros::TransportHints().tcpNoDelay());
                 ROS_INFO("[ImageProjection] single lidar mode");
+
+                subLaserCloud = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic, 5, &ImageProjection::cloudHandler, this, ros::TransportHints().tcpNoDelay());
+
+                pubExtractedCloud = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/deskew/cloud_deskewed", 1);
+                pubLaserCloudInfo = nh.advertise<lio_sam::cloud_info>("lio_sam/deskew/cloud_info", 1);
             }
             else
             {
-                mergeTargetFrame = lidarFrame;
+                ROS_INFO("[ImageProjection] multi lidar mode: %s + %s, slop=%.3f", pointCloudTopic.c_str(), pointCloudTopic2.c_str(), approxSlop);
+
                 subCloud1.reset(new message_filters::Subscriber<PC2>(nh, pointCloudTopic, 5));
                 subCloud2.reset(new message_filters::Subscriber<PC2>(nh, pointCloudTopic2, 5));
                 sync.reset(new message_filters::Synchronizer<ApproxPolicy>(ApproxPolicy(20), *subCloud1, *subCloud2));
                 sync->setMaxIntervalDuration(ros::Duration(approxSlop));
                 sync->registerCallback(boost::bind(&ImageProjection::multiCloudHandler, this, _1, _2));
-                ROS_INFO("[ImageProjection] dual lidar mode: %s + %s, slop=%.3f",
-                         pointCloudTopic.c_str(), pointCloudTopic2.c_str(), approxSlop);
+
+                pubExtractedCloud1 = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/deskew/cloud_deskewed_1", 1);
+                pubLaserCloudInfo1 = nh.advertise<lio_sam::cloud_info>("lio_sam/deskew/cloud_info_1", 1);
+
+                pubExtractedCloud2 = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/deskew/cloud_deskewed_2", 1);
+                pubLaserCloudInfo2 = nh.advertise<lio_sam::cloud_info>("lio_sam/deskew/cloud_info_2", 1);
             }
-            pubExtractedCloud = nh.advertise<sensor_msgs::PointCloud2> ("lio_sam/deskew/cloud_deskewed", 1);
-            pubLaserCloudInfo = nh.advertise<lio_sam::cloud_info> ("lio_sam/deskew/cloud_info", 1);
 
             allocateMemory();
             resetParameters();
@@ -151,25 +138,9 @@
             pcl::console::setVerbosityLevel(pcl::console::L_ERROR);
         }
 
-        Eigen::Matrix4f rpyToMat44(float x, float y, float z, float roll, float pitch, float yaw)
-        {
-            Eigen::AngleAxisf Rx(roll, Eigen::Vector3f::UnitX());
-            Eigen::AngleAxisf Ry(pitch, Eigen::Vector3f::UnitY());
-            Eigen::AngleAxisf Rz(yaw, Eigen::Vector3f::UnitZ());
-            Eigen::Quaternionf q = Rz * Ry * Rx; // ZYX
-            Eigen::Matrix3f R = q.toRotationMatrix();
-
-            Eigen::Matrix4f T = Eigen::Matrix4f::Identity();
-            T.block<3, 3>(0, 0) = R;
-            T(0, 3) = x;
-            T(1, 3) = y;
-            T(2, 3) = z;
-            return T;
-        }
-
         static bool transformPCL2_XYZ(const pcl::PCLPointCloud2 &in, pcl::PCLPointCloud2 &out, const Eigen::Matrix4f &T)
         {
-            out = in; // 메타/필드/데이터 전부 복사
+            out = in;
             int idx_x = pcl::getFieldIndex(out, "x");
             int idx_y = pcl::getFieldIndex(out, "y");
             int idx_z = pcl::getFieldIndex(out, "z");
@@ -209,170 +180,43 @@
             return true;
         }
 
-        // (옵션) ring 오프셋도 PCL2에서 직접 처리
-        static void addRingOffsetPCL2(pcl::PCLPointCloud2 &cloud, int offset)
+        bool processAndPublishOne(const sensor_msgs::PointCloud2::ConstPtr &msg, ros::Publisher &pubCloud, ros::Publisher &pubInfo, const std::string &frame_id_suffix)
         {
-            if (offset == 0)
-                return;
-            int idx = pcl::getFieldIndex(cloud, "ring");
-            if (idx < 0)
-                return;
-            auto &f = cloud.fields[idx];
-            if (f.datatype != pcl::PCLPointField::UINT16)
-            {
-                ROS_WARN_ONCE("[merge] ring is not UINT16; skip offset");
-                return;
-            }
-            const size_t n = static_cast<size_t>(cloud.width) * cloud.height;
-            const size_t step = cloud.point_step;
-            for (size_t i = 0; i < n; ++i)
-            {
-                uint8_t *base = &cloud.data[i * step];
-                uint16_t *pr = reinterpret_cast<uint16_t *>(base + f.offset);
-                *pr = static_cast<uint16_t>(*pr + offset);
-            }
-        }
+            cloudHeader = msg->header;
+            cloudHeader.stamp += ros::Duration(105049541.3);
 
-        // uint16 ring 전제(일반적). 다른 타입이면 스킵.
-        // void applyRingOffsetIfAny(pcl::PCLPointCloud2 &cloud, int offset)
-        // {
-        //     if (offset == 0)
-        //         return;
-        //     for (auto &f : cloud.fields)
-        //     {
-        //         if (f.name == "ring" && f.datatype == pcl::PCLPointField::UINT16)
-        //         {
-        //             const size_t n = cloud.width * cloud.height;
-        //             const size_t step = cloud.point_step, off = f.offset;
-        //             for (size_t i = 0; i < n; ++i)
-        //             {
-        //                 uint16_t *p = reinterpret_cast<uint16_t *>(&cloud.data[i * step + off]);
-        //                 *p = static_cast<uint16_t>(*p + offset);
-        //             }
-        //             return;
-        //         }
-        //     }
-        // }
+            if (!cachePointCloud(msg))
+                return false;
+
+            if (!deskewInfo())
+                return false;
+
+            projectPointCloud();
+
+            cloudExtraction();
+
+            cloudInfo.header = cloudHeader;
+            cloudInfo.cloud_deskewed = publishCloud(pubCloud, extractedCloud, cloudHeader.stamp, lidarFrame + frame_id_suffix);
+            pubInfo.publish(cloudInfo);
+
+            resetParameters();
+            return true;
+        }
 
         void multiCloudHandler(const sensor_msgs::PointCloud2::ConstPtr &c1, const sensor_msgs::PointCloud2::ConstPtr &c2)
         {
-            // 0) ROS → PCL2
-            pcl::PCLPointCloud2 p1_raw, p2_raw;
-            pcl_conversions::toPCL(*c1, p1_raw);
-            pcl_conversions::toPCL(*c2, p2_raw);
-
-            // 1) lidar2 → lidar1 (상대 포즈)
-            if (relativePose.size() != 6)
-                relativePose.assign(6, 0.0);
-            Eigen::Matrix4f T_l1_l2 = rpyToMat44(
-                static_cast<float>(relativePose[0]),
-                static_cast<float>(relativePose[1]),
-                static_cast<float>(relativePose[2]),
-                static_cast<float>(relativePose[3]),
-                static_cast<float>(relativePose[4]),
-                static_cast<float>(relativePose[5]) // degrees 기본 false
-            );
-
-            pcl::PCLPointCloud2 p2_in_l1;
-            if (!transformPCL2_XYZ(p2_raw, p2_in_l1, T_l1_l2))
-                return;
-            pcl::PCLPointCloud2 p1_in_l1 = p1_raw;
-
-            // 2) (옵션) lidar1 → target 포즈
-            pcl::PCLPointCloud2 p1_tgt, p2_tgt;
-            p1_tgt = p1_in_l1;
-            p2_tgt = p2_in_l1;
-
-            // 3) (옵션) 2번 라이다 ring 오프셋
-            if (ringOffsetSecond != 0)
-                addRingOffsetPCL2(p2_tgt, ringOffsetSecond);
-
-            // 4) concat (PCL2)
-            pcl::PCLPointCloud2 pcat;
-            // NOTE: 1.10에서는 concatenatePointCloud 사용 (경고만 뜸)
-            if (!pcl::concatenatePointCloud(p1_tgt, p2_tgt, pcat))
+            if (!processAndPublishOne(c1, pubExtractedCloud1, pubLaserCloudInfo1, "_1"))
             {
-                ROS_WARN_THROTTLE(1.0, "[merge] concatenatePointCloud failed (schema mismatch?)");
+                ROS_WARN_THROTTLE(1.0, "[multi] lidar1 process failed");
                 return;
             }
 
-            // 5) PCL2 → ROS
-            sensor_msgs::PointCloud2::Ptr merged(new sensor_msgs::PointCloud2);
-            pcl_conversions::fromPCL(pcat, *merged);
-            merged->header.frame_id = mergeTargetFrame;
-            merged->header.stamp = (c1->header.stamp > c2->header.stamp) ? c1->header.stamp : c2->header.stamp;
-
-            // 6) 기존 파이프라인 재사용
-            if (!cachePointCloud(merged))
+            if (!processAndPublishOne(c2, pubExtractedCloud2, pubLaserCloudInfo2, "_2"))
+            {
+                ROS_WARN_THROTTLE(1.0, "[multi] lidar2 process failed");
                 return;
-            if (!deskewInfo())
-                return;
-            projectPointCloud();
-            cloudExtraction();
-            publishClouds();
-            resetParameters();
+            }
         }
-
-        // void multiCloudHandler(const sensor_msgs::PointCloud2::ConstPtr &c1, const sensor_msgs::PointCloud2::ConstPtr &c2)
-        // {
-        //     // 0) ROS→PCL
-        //     pcl::PCLPointCloud2 p1, p2;
-        //     pcl_conversions::toPCL(*c1, p1);
-        //     pcl_conversions::toPCL(*c2, p2);
-
-        //     // 1) 2번을 1번 프레임으로:  T_l1_l2 (lidar2 → lidar1)
-        //     //    lidar2InLidar1 = [x y z r p y]
-        //     if (relativePose.size() != 6)
-        //         relativePose.assign(6, 0.0);
-        //     Eigen::Matrix4f T_l1_l2 = rpyToMat44(
-        //         static_cast<float>(relativePose[0]),
-        //         static_cast<float>(relativePose[1]),
-        //         static_cast<float>(relativePose[2]),
-        //         static_cast<float>(relativePose[3]),
-        //         static_cast<float>(relativePose[4]),
-        //         static_cast<float>(relativePose[5]));
-
-        //     pcl::PCLPointCloud2 p2_in_l1;
-        //     pcl::transformPointCloud(p2, p2_in_l1, T_l1_l2); // **여기가 PCL 행렬 변환 핵심**
-
-        //     pcl::PCLPointCloud2 p1_in_target, p2_in_target;
-        //     p1_in_target = p1;
-        //     p2_in_target = p2_in_l1;
-
-        //     // (옵션) 2번 라이다 ring 오프셋
-        //     if (ringOffsetSecond != 0)
-        //     {
-        //         applyRingOffsetIfAny(p2_in_target, ringOffsetSecond); // 앞서 제시한 그대로 재사용
-        //     }
-
-        //     // 3) concat (스키마 동일 가정)
-        //     pcl::PCLPointCloud2 pcat;
-        //     try
-        //     {
-        //         pcl::concatenatePointCloud(p1_in_target, p2_in_target, pcat);
-        //     }
-        //     catch (const std::exception &e)
-        //     {
-        //         ROS_WARN_STREAM_THROTTLE(1.0, "[merge] concatenate failed: " << e.what());
-        //         return;
-        //     }
-
-        //     // 4) PCL→ROS, 타임스탬프/프레임 설정
-        //     sensor_msgs::PointCloud2::Ptr merged(new sensor_msgs::PointCloud2);
-        //     pcl_conversions::fromPCL(pcat, *merged);
-        //     merged->header.frame_id = mergeTargetFrame;
-        //     merged->header.stamp = (c1->header.stamp > c2->header.stamp) ? c1->header.stamp : c2->header.stamp;
-
-        //     // 5) 기존 파이프라인 그대로
-        //     if (!cachePointCloud(merged))
-        //         return;
-        //     if (!deskewInfo())
-        //         return;
-        //     projectPointCloud();
-        //     cloudExtraction();
-        //     publishClouds();
-        //     resetParameters();
-        // }
 
         void allocateMemory()
         {
@@ -381,7 +225,7 @@
             fullCloud.reset(new pcl::PointCloud<PointType>());
             extractedCloud.reset(new pcl::PointCloud<PointType>());
 
-            fullCloud->points.resize(N_SCAN*Horizon_SCAN);
+            fullCloud->points.resize(N_SCAN * Horizon_SCAN);
 
             cloudInfo.startRingIndex.assign(N_SCAN, 0);
             cloudInfo.endRingIndex.assign(N_SCAN, 0);
@@ -449,6 +293,9 @@
 
         void cloudHandler(const sensor_msgs::PointCloud2ConstPtr& laserCloudMsg)
         {
+            cloudHeader = laserCloudMsg->header;
+            cloudHeader.stamp = cloudHeader.stamp + ros::Duration(105049541.3);
+
             if (!cachePointCloud(laserCloudMsg))
                 return;
 
@@ -504,6 +351,7 @@
 
             // get timestamp
             cloudHeader = currentCloudMsg.header;
+            cloudHeader.stamp = cloudHeader.stamp + ros::Duration(105049541.3);
             timeScanCur = cloudHeader.stamp.toSec();
             timeScanEnd = timeScanCur + laserCloudIn->points.back().time;
 
@@ -564,7 +412,7 @@
             // make sure IMU data available for the scan
             if (imuQueue.empty() || imuQueue.front().header.stamp.toSec() > timeScanCur || imuQueue.back().header.stamp.toSec() < timeScanEnd)
             {
-                ROS_DEBUG("Waiting for IMU data ...");
+                ROS_WARN("Waiting for IMU data ...");
                 return false;
             }
 
