@@ -183,7 +183,7 @@
         bool processAndPublishOne(const sensor_msgs::PointCloud2::ConstPtr &msg, ros::Publisher &pubCloud, ros::Publisher &pubInfo, const std::string &frame_id_suffix)
         {
             cloudHeader = msg->header;
-            cloudHeader.stamp += ros::Duration(105049541.3);
+            // cloudHeader.stamp += ros::Duration(105049541.3);
 
             if (!cachePointCloud(msg))
                 return false;
@@ -294,7 +294,7 @@
         void cloudHandler(const sensor_msgs::PointCloud2ConstPtr& laserCloudMsg)
         {
             cloudHeader = laserCloudMsg->header;
-            cloudHeader.stamp = cloudHeader.stamp + ros::Duration(105049541.3);
+            // cloudHeader.stamp = cloudHeader.stamp + ros::Duration(105049541.3);
 
             if (!cachePointCloud(laserCloudMsg))
                 return;
@@ -351,7 +351,7 @@
 
             // get timestamp
             cloudHeader = currentCloudMsg.header;
-            cloudHeader.stamp = cloudHeader.stamp + ros::Duration(105049541.3);
+            // cloudHeader.stamp = cloudHeader.stamp + ros::Duration(105049541.3);
             timeScanCur = cloudHeader.stamp.toSec();
             timeScanEnd = timeScanCur + laserCloudIn->points.back().time;
 

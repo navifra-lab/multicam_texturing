@@ -143,6 +143,7 @@ public:
     float loopClosureFrequency;
     int   surroundingKeyframeSize;
     float historyKeyframeSearchRadius;
+    float loopClosureCorrespondenceDistance;
     float historyKeyframeSearchTimeDiff;
     int   historyKeyframeSearchNum;
     float historyKeyframeFitnessScore;
@@ -257,6 +258,7 @@ public:
         nh.param<float>("lio_sam/loopClosureFrequency", loopClosureFrequency, 1.0);
         nh.param<int>("lio_sam/surroundingKeyframeSize", surroundingKeyframeSize, 50);
         nh.param<float>("lio_sam/historyKeyframeSearchRadius", historyKeyframeSearchRadius, 10.0);
+        nh.param<float>("lio_sam/loopClosureCorrespondenceDistance", loopClosureCorrespondenceDistance, 0.1);
         nh.param<float>("lio_sam/historyKeyframeSearchTimeDiff", historyKeyframeSearchTimeDiff, 30.0);
         nh.param<int>("lio_sam/historyKeyframeSearchNum", historyKeyframeSearchNum, 25);
         nh.param<float>("lio_sam/historyKeyframeFitnessScore", historyKeyframeFitnessScore, 0.3);

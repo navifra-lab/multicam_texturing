@@ -5,14 +5,21 @@ lio_sam:
     imuTopic: "/imu/data"                        # IMU data
     odomTopic: "/odometry/imu"                                    # IMU pre-preintegration odometry, same frequency as IMU
     gpsTopic: "/sensing/gnss/clap/ros/odometry"                   # GPS odometry topic from navsat, see module_navsat.launch file
-    imuHz: 500
+    imuHz: 200
 
     # multi lidar
-    multilidar: false
+    multilidar: true
     pointCloudTopic2: "/vrt/points"
     approxSlop: 0.03
     ring_offset_second: 0
-    relativePose: [-0.17639, 0.01226, -0.08135, -0.025043, 0.645714, 3.1229324]  #ZYX
+    # relativePose: [-0.17639, 0.01226, -0.08135, -0.025043, 0.645714, 3.1229324]  #ZYX
+    relativePose: [-0.17880645,  -0.01278965,-0.00980196, -0.0029272, 0.6286121, -3.1376004]  #ZYX icp
+    # relativePose: [-0.1747,  -0.00079,-0.08621, -0.0029272, 0.6286121, -3.1376004]  #ZYX based ground truth 
+
+    #t_init = np.array([-0.192, 0.0, -0.033], dtype=np.float32)
+    #R = [-0.8191521, 0.0, -0.5735765],
+    #    [ 0.0, -1.0, 0.0],
+    #    [-0.5735765, 0.0, 0.8191521]
     
     # Frames
     lidarFrame: "os_lidar"
@@ -140,7 +147,7 @@ lio_sam:
      pitch: 0.0139626
      yaw: 0.0
 
-    #cam1-4 
+    #cam1-4 ZYX
     /camera_1/:
      frame_id: "camera_1_frame"
      width: 1920
@@ -164,12 +171,12 @@ lio_sam:
      K: [874.9507060886988, 0.0, 942.9809828038187, 0.0, 872.6241208542509, 589.2538081803823, 0.0, 0.0, 1.0]
      D: [0.0, 0.0, 0.0, 0.0]
      P: [874.9507060886988,0.0,872.6241208542509,0.0,0.0,942.9809828038187,589.2538081803823,0.0,0.0,0.0,1.0,0.0]
-     x: 0.0085
-     y: -0.1517
-     z: -0.2199
-     roll: -2.3827559
-     pitch: 1.5568481
-     yaw: 2.3296817
+     x: 0.0
+     y: -0.14053895
+     z: -0.243762
+     roll: -3.0766396 #-2.3827559
+     pitch: 1.3206759 #1.5568481
+     yaw: 1.6378292 #2.3296817
 
 
 

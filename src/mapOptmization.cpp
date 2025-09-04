@@ -1138,8 +1138,8 @@ public:
         }
 
         // ICP Settings
-        static pcl::IterativeClosestPoint<PointType, PointType> icp;
-        icp.setMaxCorrespondenceDistance(historyKeyframeSearchRadius * 2);
+        static pcl::GeneralizedIterativeClosestPoint<PointType, PointType> icp;
+        icp.setMaxCorrespondenceDistance(loopClosureCorrespondenceDistance);
         icp.setMaximumIterations(100);
         icp.setTransformationEpsilon(1e-6);
         icp.setEuclideanFitnessEpsilon(1e-6);
@@ -1173,43 +1173,56 @@ public:
         pcl::getTranslationAndEulerAngles(tCorrect, x, y, z, roll, pitch, yaw);
         gtsam::Pose3 poseFrom = Pose3(Rot3::RzRyRx(roll, pitch, yaw), Point3(x, y, z));
         gtsam::Pose3 poseTo = pclPointTogtsamPose3(copy_cloudKeyPoses6D->points[loopKeyPre]);
-        gtsam::Vector Vector6(6);
-        float noiseScore = icp.getFitnessScore();
-        // TODO: NOISE SCORE
-        // auto sq = [](double v)
-        // { return v * v; };
-        // auto deg2rad = [](double d)
-        // { return d * M_PI / 180.0; };
-
-        // // 1) score는 m^2 (MSE). 가능하면 ICP에서 쓴 max_corr와 동일 값으로 평가
-        // double score = icp.getFitnessScore(icp.getMaxCorrespondenceDistance());
-        // // score가 0에 너무 가까우면 수치불안하니 최소치 부여
-        // score = std::max(score, 1e-6);
-
-        // // 2) 이동/회전 스케일과 특성 반경 (주차장 초기값)
-        // double alpha_t = 1.0; // translation scale
-        // double beta_r = 1.0;  // rotation scale
-        // double Rchar = 1.5;   // m, 특징 퍼짐 반경(1.0~2.0 사이 튜닝)
-
-        // // 3) 원시 분산
-        // double var_t_raw = alpha_t * score;                  // m^2
-        // double var_r_raw = beta_r * score / (Rchar * Rchar); // rad^2
-
-        // // 4) 바닥/천장(초기 튜닝값)
-        // // 이동: 3 cm ~ 30 cm
-        // double var_t = std::clamp(var_t_raw, sq(0.03), sq(0.30));
-        // // 회전: 0.5° ~ 5°
-        // double var_r = std::clamp(var_r_raw, sq(deg2rad(0.5)), sq(deg2rad(5.0)));
-
-        // // 5) yaw, z를 조금 더 느슨하게
-        // double var_rp = var_r;        // roll, pitch
-        // double var_yaw = 2.0 * var_r; // yaw는 2배 느슨
-        // double var_xy = var_t;        // x, y
-        // double var_z = 2.0 * var_t;   // z는 2배 느슨
-
         // gtsam::Vector Vector6(6);
-        // Vector6 << var_rp, var_rp, var_yaw, var_xy, var_xy, var_z;
-        Vector6 << noiseScore, noiseScore, noiseScore, noiseScore, noiseScore, noiseScore;
+        // float noiseScore = icp.getFitnessScore();
+        // // float noiseScoreSquared = noiseScore * noiseScore;
+        // // float noisePower = noiseScore * noiseScore * noiseScore;
+        // // std::cout << "@@@@@@@@@@@@@@@@@@@ fitness score : " << noiseScore
+        // //           << std::endl;
+        // Vector6 << noiseScore, noiseScore, noiseScore, noiseScore, noiseScore,
+        //     noiseScore;
+
+        auto sq = [](double v)
+        { return v * v; };
+        auto deg2rad = [](double d)
+        { return d * M_PI / 180.0; };
+
+        // 1) score는 m^2 (MSE). 가능하면 ICP에서 쓴 max_corr와 동일 값으로 평가
+        double score = icp.getFitnessScore(icp.getMaxCorrespondenceDistance());
+        // score가 0에 너무 가까우면 수치불안하니 최소치 부여
+        score = std::max(score, 1e-6);
+
+        // 2) 이동/회전 스케일과 특성 반경 (주차장 초기값)
+        double alpha_t = 1.0; // translation scale
+        double beta_r = 1.0;  // rotation scale
+        double Rchar = 1.5;   // m, 특징 퍼짐 반경(1.0~2.0 사이 튜닝)
+
+        // 3) 원시 분산
+        double var_t_raw = alpha_t * score;                  // m^2
+        double var_r_raw = beta_r * score / (Rchar * Rchar); // rad^2
+
+        // 4) 바닥/천장(초기 튜닝값)
+        // 이동: 3 cm ~ 30 cm
+        double var_t = std::clamp(var_t_raw, sq(0.03), sq(0.30));
+        // 회전: 0.5° ~ 5°
+        double var_r = std::clamp(var_r_raw, sq(deg2rad(0.5)), sq(deg2rad(5.0)));
+
+        // 5) yaw, z를 조금 더 느슨하게
+        double var_rp = var_r;        // roll, pitch
+        double var_yaw = 2.0 * var_r; // yaw는 2배 느슨
+        double var_xy = var_t;        // x, y
+        double var_z = 2.0 * var_t;   // z는 2배 느슨
+
+        gtsam::Vector Vector6(6);
+        Vector6 << var_rp, var_rp, var_yaw, var_xy, var_xy, var_z;
+
+        
+        // gtSAMgraph.add(BetweenFactor<Pose3>(..., loopNoise));
+
+        // Vector6 << noiseScoreSquared, noiseScoreSquared, noiseScoreSquared, noiseScoreSquared, noiseScoreSquared,
+        //     noiseScoreSquared;
+        // Vector6 << noiseScore, noiseScore, noiseScore, noiseScore, noiseScore, noiseScore;
+        // Vector6 << noiseScore*10, noiseScore*10, noiseScore*10, noiseScore*10, noiseScore*10, noiseScore*10;
         noiseModel::Diagonal::shared_ptr constraintNoise = noiseModel::Diagonal::Variances(Vector6);
 
         // Add pose constraint
@@ -2060,10 +2073,10 @@ public:
         else
         {
             // TODO: noise
-            //  double noiseScale = 3e-4;;
-            //  double noiseRotScale = 5e-3;
-            //  noiseModel::Diagonal::shared_ptr odometryNoise = noiseModel::Diagonal::Variances((Vector(6) << noiseScale,noiseScale,noiseScale, noiseRotScale,noiseRotScale,noiseRotScale).finished());
-            noiseModel::Diagonal::shared_ptr odometryNoise = noiseModel::Diagonal::Variances((Vector(6) << 1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4).finished());
+             double noiseScale = 3e-4;;
+             double noiseRotScale = 5e-3;
+             noiseModel::Diagonal::shared_ptr odometryNoise = noiseModel::Diagonal::Variances((Vector(6) << noiseScale,noiseScale,noiseScale, noiseRotScale,noiseRotScale,noiseRotScale).finished());
+            // noiseModel::Diagonal::shared_ptr odometryNoise = noiseModel::Diagonal::Variances((Vector(6) << 1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4).finished());
             gtsam::Pose3 poseFrom = pclPointTogtsamPose3(cloudKeyPoses6D->points.back());
             gtsam::Pose3 poseTo = trans2gtsamPose(transformTobeMapped);
             gtSAMgraph.add(BetweenFactor<Pose3>(cloudKeyPoses3D->size() - 1, cloudKeyPoses3D->size(), poseFrom.between(poseTo), odometryNoise));
