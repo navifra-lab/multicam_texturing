@@ -8,7 +8,7 @@ lio_sam:
     imuHz: 200
 
     # multi lidar
-    multilidar: true
+    multilidar: false
     pointCloudTopic2: "/vrt/points"
     approxSlop: 0.03
     ring_offset_second: 0

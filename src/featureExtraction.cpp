@@ -57,7 +57,6 @@ public:
     // 파라미터
     std::string infoTopic1{"/lio_sam/deskew/cloud_info_1"};
     std::string infoTopic2{"/lio_sam/deskew/cloud_info_2"};
-    double approxSlop{0.02}; // 20ms 기본
 
     Eigen::Matrix4f rpyToMat44(float x, float y, float z, float roll, float pitch, float yaw)
     {
@@ -191,10 +190,14 @@ public:
         FEOutputs o1, o2;
 
         if (!processOne(m1, o1))
+        {
             return;
+        }
 
         if (!processOne(m2, o2))
+        {
             return;
+        }
 
         pcl::PointCloud<PointType>::Ptr c2_in1(new pcl::PointCloud<PointType>());
         pcl::PointCloud<PointType>::Ptr s2_in1(new pcl::PointCloud<PointType>());

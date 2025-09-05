@@ -55,7 +55,8 @@
         ros::Publisher pubLaserCloudInfo1, pubLaserCloudInfo2;
 
         ros::Subscriber subImu;
-        std::deque<sensor_msgs::Imu> imuQueue;
+        std::deque<sensor_msgs::Imu> imuQueue1;
+        std::deque<sensor_msgs::Imu> imuQueue2;
 
         ros::Subscriber subOdom;
         std::deque<nav_msgs::Odometry> odomQueue;
@@ -180,19 +181,23 @@
             return true;
         }
 
-        bool processAndPublishOne(const sensor_msgs::PointCloud2::ConstPtr &msg, ros::Publisher &pubCloud, ros::Publisher &pubInfo, const std::string &frame_id_suffix)
+        bool processAndPublishOne(const sensor_msgs::PointCloud2::ConstPtr &msg, ros::Publisher &pubCloud, ros::Publisher &pubInfo, const std::string &frame_id_suffix, std::deque<sensor_msgs::Imu> &imuQueueRef)
         {
             cloudHeader = msg->header;
-            // cloudHeader.stamp += ros::Duration(105049541.3);
 
             if (!cachePointCloud(msg))
+            {
+                std::cout<<"cachePointCloud error! "<<std::endl;
                 return false;
+            }
 
-            if (!deskewInfo())
+            if (!deskewInfo(imuQueueRef))
+               { 
+                std::cout<<"deskewInfo error! "<<std::endl;
                 return false;
+            }
 
             projectPointCloud();
-
             cloudExtraction();
 
             cloudInfo.header = cloudHeader;
@@ -205,13 +210,13 @@
 
         void multiCloudHandler(const sensor_msgs::PointCloud2::ConstPtr &c1, const sensor_msgs::PointCloud2::ConstPtr &c2)
         {
-            if (!processAndPublishOne(c1, pubExtractedCloud1, pubLaserCloudInfo1, "_1"))
+            if (!processAndPublishOne(c1, pubExtractedCloud1, pubLaserCloudInfo1, "_1", imuQueue1))
             {
                 ROS_WARN_THROTTLE(1.0, "[multi] lidar1 process failed");
                 return;
             }
 
-            if (!processAndPublishOne(c2, pubExtractedCloud2, pubLaserCloudInfo2, "_2"))
+            if (!processAndPublishOne(c2, pubExtractedCloud2, pubLaserCloudInfo2, "_2", imuQueue2))
             {
                 ROS_WARN_THROTTLE(1.0, "[multi] lidar2 process failed");
                 return;
@@ -263,9 +268,10 @@
         void imuHandler(const sensor_msgs::Imu::ConstPtr& imuMsg)
         {
             sensor_msgs::Imu thisImu = imuConverter(*imuMsg);
-
-            std::lock_guard<std::mutex> lock1(imuLock);
-            imuQueue.push_back(thisImu);
+            std::lock_guard<std::mutex> lk(imuLock);
+            imuQueue1.push_back(thisImu);
+            if (multilidar)
+                imuQueue2.push_back(thisImu);
 
             // debug IMU data
             // cout << std::setprecision(6);
@@ -404,13 +410,30 @@
             return true;
         }
 
+        bool deskewInfo(std::deque<sensor_msgs::Imu> &imuQueueRef)
+        {
+            std::lock_guard<std::mutex> lock1(imuLock);
+            std::lock_guard<std::mutex> lock2(odoLock);
+
+            if (imuQueueRef.empty() || imuQueueRef.front().header.stamp.toSec() > timeScanCur || imuQueueRef.back().header.stamp.toSec() < timeScanEnd)
+            {
+                ROS_WARN("Waiting for IMU data ...");
+                return false;
+            }
+
+            imuDeskewInfo(imuQueueRef);
+            odomDeskewInfo();
+
+            return true;
+        }
+
         bool deskewInfo()
         {
             std::lock_guard<std::mutex> lock1(imuLock);
             std::lock_guard<std::mutex> lock2(odoLock);
 
             // make sure IMU data available for the scan
-            if (imuQueue.empty() || imuQueue.front().header.stamp.toSec() > timeScanCur || imuQueue.back().header.stamp.toSec() < timeScanEnd)
+            if (imuQueue1.empty() || imuQueue1.front().header.stamp.toSec() > timeScanCur || imuQueue1.back().header.stamp.toSec() < timeScanEnd)
             {
                 ROS_WARN("Waiting for IMU data ...");
                 return false;
@@ -423,26 +446,83 @@
             return true;
         }
 
-        void imuDeskewInfo()
+        void imuDeskewInfo(std::deque<sensor_msgs::Imu> &imuQueueRef)
         {
             cloudInfo.imuAvailable = false;
 
-            while (!imuQueue.empty())
+            while (!imuQueueRef.empty())
             {
-                if (imuQueue.front().header.stamp.toSec() < timeScanCur - 0.01)
-                    imuQueue.pop_front();
+                if (imuQueueRef.front().header.stamp.toSec() < timeScanCur - 0.01)
+                    imuQueueRef.pop_front();
                 else
                     break;
             }
 
-            if (imuQueue.empty())
+            if (imuQueueRef.empty())
                 return;
 
             imuPointerCur = 0;
 
-            for (int i = 0; i < (int)imuQueue.size(); ++i)
+            for (int i = 0; i < (int)imuQueueRef.size(); ++i)
             {
-                sensor_msgs::Imu thisImuMsg = imuQueue[i];
+                sensor_msgs::Imu thisImuMsg = imuQueueRef[i];
+                double currentImuTime = thisImuMsg.header.stamp.toSec();
+
+                if (currentImuTime <= timeScanCur)
+                    imuRPY2rosRPY(&thisImuMsg, &cloudInfo.imuRollInit, &cloudInfo.imuPitchInit, &cloudInfo.imuYawInit);
+
+                if (currentImuTime > timeScanEnd + 0.01)
+                    break;
+
+                if (imuPointerCur == 0)
+                {
+                    imuRotX[0] = 0;
+                    imuRotY[0] = 0;
+                    imuRotZ[0] = 0;
+                    imuTime[0] = currentImuTime;
+                    ++imuPointerCur;
+                    continue;
+                }
+
+                double angular_x, angular_y, angular_z;
+                imuAngular2rosAngular(&thisImuMsg, &angular_x, &angular_y, &angular_z);
+
+                double dt = currentImuTime - imuTime[imuPointerCur - 1];
+                imuRotX[imuPointerCur] = imuRotX[imuPointerCur - 1] + angular_x * dt;
+                imuRotY[imuPointerCur] = imuRotY[imuPointerCur - 1] + angular_y * dt;
+                imuRotZ[imuPointerCur] = imuRotZ[imuPointerCur - 1] + angular_z * dt;
+                imuTime[imuPointerCur] = currentImuTime;
+                ++imuPointerCur;
+            }
+
+            --imuPointerCur;
+            
+            if (imuPointerCur <= 0)
+                return;
+
+            cloudInfo.imuAvailable = true;
+        }
+
+        void imuDeskewInfo()
+        {
+            cloudInfo.imuAvailable = false;
+
+            while (!imuQueue1.empty())
+            {
+                if (imuQueue1.front().header.stamp.toSec() < timeScanCur - 0.01)
+                    imuQueue1.pop_front();
+                else
+                    break;
+            }
+
+            if (imuQueue1.empty())
+                return;
+
+            imuPointerCur = 0;
+
+            for (int i = 0; i < (int)imuQueue1.size(); ++i)
+            {
+                sensor_msgs::Imu thisImuMsg = imuQueue1[i];
                 double currentImuTime = thisImuMsg.header.stamp.toSec();
 
                 // get roll, pitch, and yaw estimation for this scan

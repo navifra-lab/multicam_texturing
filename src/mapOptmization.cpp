@@ -1124,7 +1124,7 @@ public:
         if (detectLoopClosureExternal(&loopKeyCur, &loopKeyPre) == false)
             if (detectLoopClosureDistance(&loopKeyCur, &loopKeyPre) == false)
                 return;
-
+        
         // extract cloud
         pcl::PointCloud<PointType>::Ptr cureKeyframeCloud(new pcl::PointCloud<PointType>());
         pcl::PointCloud<PointType>::Ptr prevKeyframeCloud(new pcl::PointCloud<PointType>());
@@ -1216,7 +1216,6 @@ public:
         gtsam::Vector Vector6(6);
         Vector6 << var_rp, var_rp, var_yaw, var_xy, var_xy, var_z;
 
-        
         // gtSAMgraph.add(BetweenFactor<Pose3>(..., loopNoise));
 
         // Vector6 << noiseScoreSquared, noiseScoreSquared, noiseScoreSquared, noiseScoreSquared, noiseScoreSquared,
