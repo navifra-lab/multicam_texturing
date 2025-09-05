@@ -441,13 +441,31 @@ public:
 
         downSizeFilterCornerRGB2.setLeafSize(saveLeafSize, saveLeafSize, saveLeafSize);
         downSizeFilterSurfRGB2.setLeafSize(saveLeafSize, saveLeafSize, saveLeafSize);
+        static constexpr double kCamTimeOffsetSec = 0.12;
 
         for (const auto &camera_topic : cameraTopics)
         {
+            // const std::string image_topic = camera_topic + imageTopicLastName;
+            // const std::string camera_info_topic = camera_topic + cameraInfoTopicLastName;
+
+            // color_point_cloud::CameraTypePtr camera_type_ptr = std::make_shared<color_point_cloud::CameraType>(image_topic, camera_info_topic);
+            // camera_type_stdmap_[camera_topic] = camera_type_ptr;
+
+            // image_subscribers_.push_back(
+            //     nh.subscribe<sensor_msgs::CompressedImage>(
+            //         image_topic, 100,
+            //         [this, camera_topic](const sensor_msgs::CompressedImageConstPtr &msg)
+            //         {
+            //             std::lock_guard<std::mutex> lk(cam_mtx_[camera_topic]); 
+            //             auto it = camera_type_stdmap_.find(camera_topic);
+            //             if (it != camera_type_stdmap_.end())
+            //                 it->second->push_compressed(msg, kMaxBuf);
+            //         }));
             const std::string image_topic = camera_topic + imageTopicLastName;
             const std::string camera_info_topic = camera_topic + cameraInfoTopicLastName;
 
-            color_point_cloud::CameraTypePtr camera_type_ptr = std::make_shared<color_point_cloud::CameraType>(image_topic, camera_info_topic);
+            color_point_cloud::CameraTypePtr camera_type_ptr =
+                std::make_shared<color_point_cloud::CameraType>(image_topic, camera_info_topic);
             camera_type_stdmap_[camera_topic] = camera_type_ptr;
 
             image_subscribers_.push_back(
@@ -455,10 +473,21 @@ public:
                     image_topic, 100,
                     [this, camera_topic](const sensor_msgs::CompressedImageConstPtr &msg)
                     {
-                        std::lock_guard<std::mutex> lk(cam_mtx_[camera_topic]); 
+                        // 무조건 0.12s 빼기
+                        sensor_msgs::CompressedImagePtr adj(new sensor_msgs::CompressedImage(*msg));
+                        const ros::Time ts = adj->header.stamp;
+                        if (!ts.isZero())
+                        {
+                            if (ts.toSec() > kCamTimeOffsetSec)
+                                adj->header.stamp = ts - ros::Duration(kCamTimeOffsetSec);
+                            else
+                                adj->header.stamp = ros::Time(0); // 언더플로우 방지
+                        }
+
+                        std::lock_guard<std::mutex> lk(cam_mtx_[camera_topic]);
                         auto it = camera_type_stdmap_.find(camera_topic);
                         if (it != camera_type_stdmap_.end())
-                            it->second->push_compressed(msg, kMaxBuf);
+                            it->second->push_compressed(adj, kMaxBuf);
                     }));
 
             sensor_msgs::CameraInfoPtr cam_info(new sensor_msgs::CameraInfo);

@@ -184,6 +184,12 @@
         bool processAndPublishOne(const sensor_msgs::PointCloud2::ConstPtr &msg, ros::Publisher &pubCloud, ros::Publisher &pubInfo, const std::string &frame_id_suffix, std::deque<sensor_msgs::Imu> &imuQueueRef)
         {
             cloudHeader = msg->header;
+            // std::cout<<"before : "<<cloudHeader.stamp<<std::endl;
+            // cloudHeader.stamp = cloudHeader.stamp + ros::Duration(105049541.3);
+            // const ros::Time t_in = cloudHeader.stamp;
+            // const ros::Time t_pub = t_in + ros::Duration(0.12);
+            // cloudHeader.stamp = t_pub;
+            // std::cout<<"after : "<<cloudHeader.stamp<<std::endl;
 
             if (!cachePointCloud(msg))
             {
@@ -300,7 +306,6 @@
         void cloudHandler(const sensor_msgs::PointCloud2ConstPtr& laserCloudMsg)
         {
             cloudHeader = laserCloudMsg->header;
-            // cloudHeader.stamp = cloudHeader.stamp + ros::Duration(105049541.3);
 
             if (!cachePointCloud(laserCloudMsg))
                 return;
@@ -358,6 +363,9 @@
             // get timestamp
             cloudHeader = currentCloudMsg.header;
             // cloudHeader.stamp = cloudHeader.stamp + ros::Duration(105049541.3);
+            // const ros::Time t_in = cloudHeader.stamp;
+            // const ros::Time t_pub = t_in + ros::Duration(0.12);
+            // cloudHeader.stamp = t_pub;
             timeScanCur = cloudHeader.stamp.toSec();
             timeScanEnd = timeScanCur + laserCloudIn->points.back().time;
 
@@ -496,7 +504,7 @@
             }
 
             --imuPointerCur;
-            
+
             if (imuPointerCur <= 0)
                 return;
 
