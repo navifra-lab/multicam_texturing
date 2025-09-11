@@ -51,10 +51,8 @@ public:
     int *cloudNeighborPicked;
     int *cloudLabel;
 
-    // 병합 시 변환 (lidar2 -> lidar1)
     Eigen::Matrix4f T_21 = Eigen::Matrix4f::Identity();
 
-    // 파라미터
     std::string infoTopic1{"/lio_sam/deskew/cloud_info_1"};
     std::string infoTopic2{"/lio_sam/deskew/cloud_info_2"};
 
