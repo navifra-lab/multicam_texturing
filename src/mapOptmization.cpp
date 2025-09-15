@@ -811,7 +811,7 @@ public:
 #pragma omp parallel
                               {
                                   std::vector<pcl::PointXYZRGB> local;
-                                  local.reserve(1024);
+                                  local.reserve(Horizon_SCAN);
 
 #pragma omp for nowait
                                   for (int i = 0; i < static_cast<int>(pts.size()); ++i)
@@ -862,7 +862,7 @@ public:
 #pragma omp parallel
                               {
                                   std::vector<pcl::PointXYZRGB> local;
-                                  local.reserve(1024);
+                                  local.reserve(Horizon_SCAN);
 
 #pragma omp for nowait
                                   for (int i = 0; i < static_cast<int>(pts.size()); ++i)
@@ -913,7 +913,7 @@ public:
 #pragma omp parallel
                               {
                                   std::vector<pcl::PointXYZRGB> local;
-                                  local.reserve(1024);
+                                  local.reserve(Horizon_SCAN);
 
 #pragma omp for nowait
                                   for (int i = 0; i < static_cast<int>(pts.size()); ++i)
@@ -1649,11 +1649,11 @@ public:
         laserCloudCornerFromMap->clear();
         laserCloudSurfFromMap->clear();
 
-        std::ostringstream oss;
-        oss << "/dataset/test/vdbfusion/local/frame_" << std::setw(6) << std::setfill('0') << localMapIdx << ".pcd";
+        // std::ostringstream oss;
+        // oss << "/dataset/test/vdbfusion/local/frame_" << std::setw(6) << std::setfill('0') << localMapIdx << ".pcd";
 
         // pcl::PointCloud<PointType>::Ptr raw_temp(new pcl::PointCloud<PointType>());
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr localMap(new pcl::PointCloud<pcl::PointXYZRGB>());
+        // pcl::PointCloud<pcl::PointXYZRGB>::Ptr localMap(new pcl::PointCloud<pcl::PointXYZRGB>());
 
         for (int i = 0; i < (int)cloudToExtract->size(); ++i)
         {
@@ -1681,28 +1681,28 @@ public:
                 laserCloudMapContainer[thisKeyInd] = make_pair(laserCloudCornerTemp, laserCloudSurfTemp);
             }
 
-            if (i < 5)
-            {
-                pcl::PointCloud<pcl::PointXYZRGB>::Ptr raw_temp(new pcl::PointCloud<pcl::PointXYZRGB>());
-                pcl::copyPointCloud(*rawCloudKeyFrames[thisKeyInd], *raw_temp);
+            // if (i < 10)
+            // {
+            //     pcl::PointCloud<pcl::PointXYZRGB>::Ptr raw_temp(new pcl::PointCloud<pcl::PointXYZRGB>());
+            //     pcl::copyPointCloud(*rawCloudKeyFrames[thisKeyInd], *raw_temp);
 
-                pcl::PointCloud<pcl::PointXYZRGB> laserCloudRawTemp = *transformPointCloud(raw_temp, &cloudKeyPoses6D->points[thisKeyInd]);
+            //     pcl::PointCloud<pcl::PointXYZRGB> laserCloudRawTemp = *transformPointCloud(raw_temp, &cloudKeyPoses6D->points[thisKeyInd]);
 
-                // NaN 제거
-                std::vector<int> indices;
-                pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
-                *cloud = laserCloudRawTemp;
-                pcl::removeNaNFromPointCloud(*cloud, *cloud, indices);
+            //     // NaN 제거
+            //     std::vector<int> indices;
+            //     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+            //     *cloud = laserCloudRawTemp;
+            //     pcl::removeNaNFromPointCloud(*cloud, *cloud, indices);
 
-                // 누적
-                *localMap += *cloud;
-            }
+            //     // 누적
+            //     *localMap += *cloud;
+            // }
         }
-        localMap->width = localMap->points.size();
-        localMap->height = 1;
-        localMap->is_dense = true;
-        pcl::io::savePCDFileBinary(oss.str(), *localMap);
-        localMapIdx++;
+        // localMap->width = localMap->points.size();
+        // localMap->height = 1;
+        // localMap->is_dense = true;
+        // pcl::io::savePCDFileBinary(oss.str(), *localMap);
+        // localMapIdx++;
 
         // Downsample the surrounding corner key frames (or map)
         downSizeFilterCorner.setInputCloud(laserCloudCornerFromMap);

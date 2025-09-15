@@ -8,7 +8,7 @@ lio_sam:
     imuHz: 200
 
     # multi lidar
-    multilidar: true
+    multilidar: false
     pointCloudTopic2: "/vrt/points"
     approxSlop: 0.03
     ring_offset_second: 0
@@ -40,7 +40,7 @@ lio_sam:
     # Sensor Settings
     sensor: ouster                              # lidar sensor type, either 'velodyne', 'ouster' or 'livox'
     N_SCAN: 32                                    # number of lidar channels (i.e., Velodyne/Ouster: 16, 32, 64, 128, Livox Horizon: 6)
-    Horizon_SCAN: 1024                            # lidar horizontal resolution (Velodyne:1800, Ouster:512,1024,2048, Livox Horizon: 4000)
+    Horizon_SCAN: 2048                            # lidar horizontal resolution (Velodyne:1800, Ouster:512,1024,2048, Livox Horizon: 4000)
     downsampleRate: 1                             # default: 1. Downsample your data if too many
     # points. i.e., 16 = 64 / 4, 16 = 16 / 1
     lidarMinRange: 0.5                         # default: 1.0, minimum lidar range to be used
@@ -90,8 +90,8 @@ lio_sam:
     # Surrounding map
     surroundingkeyframeAddingDistThreshold: 0.1 #0.5 #1.0   # meters, regulate keyframe adding threshold
     surroundingkeyframeAddingAngleThreshold: 0.02 #0.1  #0.2  # radians, regulate keyframe adding threshold
-    surroundingKeyframeDensity: 0.5  #2.0               # meters, downsample surrounding keyframe poses
-    surroundingKeyframeSearchRadius: 10.0  #50.0         # meters, within n meters scan-to-map optimization
+    surroundingKeyframeDensity: 0.2  #2.0               # meters, downsample surrounding keyframe poses
+    surroundingKeyframeSearchRadius: 5.0  #50.0         # meters, within n meters scan-to-map optimization
     # (when loop closure disabled)
 
     # Loop closure
