@@ -100,6 +100,7 @@ lio_sam:
     surroundingkeyframeAddingAngleThreshold: 0.1 #0.1  #0.2  # radians, regulate keyframe adding threshold
     surroundingKeyframeDensity: 0.5  #1.0  #2.0               # meters, downsample surrounding keyframe poses
     surroundingKeyframeSearchRadius: 5.0  #50.0         # meters, within n meters scan-to-map optimization
+    surroundingKeyframeSearchRadiusNarrow: 1.0
     # (when loop closure disabled)
 
     # Loop closure
@@ -108,6 +109,7 @@ lio_sam:
     surroundingKeyframeSize: 50 #50                   # submap size (when loop closure enabled)
     historyKeyframeSearchRadius: 6.0 #2.5 #15.0       # meters, key frame that is within n meters from
     loopClosureCorrespondenceDistance: 5.0 #2.5 #15.0       # meters, key frame that is within n meters from
+    loopClosureCorrespondenceDistanceNarrow: 1.0
     # current pose will be considerd for loop closure
     historyKeyframeSearchTimeDiff: 30.0           # seconds, key frame that is n seconds older will be
     # considered for loop closure

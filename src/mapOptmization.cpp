@@ -987,15 +987,15 @@ public:
                 if(laserCloudSurfLast->points.size()<6000)
                 {
                     // imuRPYWeight=0.2;
-                    surroundingKeyframeSearchRadius=1.0;
-                    loopClosureCorrespondenceDistance=0.3;
+                    KeyframeSearchRadius=surroundingKeyframeSearchRadiusNarrow;
+                    CorrespondenceDistance=loopClosureCorrespondenceDistanceNarrow;
                     isnarrow=true;
                 }
                 else
                 {
                     // imuRPYWeight=0.01;
-                    surroundingKeyframeSearchRadius=1.0;
-                    loopClosureCorrespondenceDistance=1.0;
+                    KeyframeSearchRadius=surroundingKeyframeSearchRadius;
+                    CorrespondenceDistance=loopClosureCorrespondenceDistance;
                     isnarrow=false;
                 }
 
@@ -1263,7 +1263,7 @@ public:
 
         // ICP Settings
         static pcl::GeneralizedIterativeClosestPoint<PointType, PointType> icp;
-        icp.setMaxCorrespondenceDistance(loopClosureCorrespondenceDistance);
+        icp.setMaxCorrespondenceDistance(CorrespondenceDistance);
         icp.setMaximumIterations(100);
         icp.setTransformationEpsilon(1e-6);
         icp.setEuclideanFitnessEpsilon(1e-6);
@@ -1751,7 +1751,7 @@ public:
 
             // extract all the nearby key poses and downsample them
             kdtreeSurroundingKeyPoses->setInputCloud(cloudKeyPoses3D); // create kd-tree
-            kdtreeSurroundingKeyPoses->radiusSearch(cloudKeyPoses3D->back(), (double)surroundingKeyframeSearchRadius, pointSearchInd, pointSearchSqDis);
+            kdtreeSurroundingKeyPoses->radiusSearch(cloudKeyPoses3D->back(), (double)KeyframeSearchRadius, pointSearchInd, pointSearchSqDis);
             for (int i = 0; i < (int)pointSearchInd.size(); ++i)
             {
                 int id = pointSearchInd[i];
@@ -1788,7 +1788,7 @@ public:
 
         for (int i = 0; i < (int)cloudToExtract->size(); ++i)
         {
-            if (pointDistance(cloudToExtract->points[i], cloudKeyPoses3D->back()) > surroundingKeyframeSearchRadius)
+            if (pointDistance(cloudToExtract->points[i], cloudKeyPoses3D->back()) > KeyframeSearchRadius)
                 continue;
 
             int thisKeyInd = (int)cloudToExtract->points[i].intensity;
@@ -2047,12 +2047,6 @@ public:
                 ++dbg_used;
             }
         }
-
-        ROS_INFO_STREAM("[FEAT][corner] used="<<dbg_used<<"/"<<dbg_total
-            <<" kn5_ok="<<dbg_kn_ok<<"/"<<dbg_kn_tot
-            <<" lam2/lam1_avg="<<(dbg_total>0? (dbg_lam_ratio_sum/dbg_total):0.0)
-            <<" dist_avg="     <<(dbg_total>0? (dbg_dist_sum/dbg_total)      :0.0)
-            <<" dist_max="     << dbg_dist_max);
     }
 
     void surfOptimization()
@@ -2149,13 +2143,6 @@ public:
                 ++dbg_used;
             }
         }
-
-        ROS_INFO_STREAM("[FEAT][surf] used="<<dbg_used<<"/"<<dbg_total
-            <<" kn5_ok="<<dbg_kn_ok<<"/"<<dbg_kn_tot
-            <<" rms_avg="  <<(dbg_total>0? (dbg_rms_sum/dbg_total):0.0)
-            <<" rms_max="  << dbg_rms_max
-            <<" |pd|_avg=" <<(dbg_total>0? (dbg_absd_sum/dbg_total):0.0)
-            <<" |pd|_max=" << dbg_absd_max);
     }
 
     void combineOptimizationCoeffs()
@@ -2185,9 +2172,6 @@ public:
         }
         std::fill(laserCloudOriCornerFlag.begin(), laserCloudOriCornerFlag.end(), false);
         std::fill(laserCloudOriSurfFlag.begin(),  laserCloudOriSurfFlag.end(),  false);
-
-        ROS_INFO_STREAM("[COEFF] merged corner="<<addCorner<<" surf="<<addSurf
-            <<" | total M="<< laserCloudOri->size());
     }
 
     bool LMOptimization(int iterCount)
@@ -2277,12 +2261,6 @@ public:
                 }
             }
             matP = V * V2.transpose();
-
-            std::ostringstream oss;
-            oss<<std::setprecision(3)<<std::fixed<<"[LM] iter=0 S=[";
-            for(int i=0;i<6;++i){ oss<<S(i)<<(i<5?",":""); }
-            oss<<"] isDeg="<<isDegenerate;
-            ROS_INFO_STREAM(oss.str());
         }
 
         Eigen::Matrix<double, 6, 1> X = AtA.ldlt().solve(Atb);
@@ -2322,15 +2300,6 @@ public:
         const double deltaR = std::sqrt(X(0)*X(0) + X(1)*X(1) + X(2)*X(2)) * (180.0 / M_PI);
         const double deltaT = std::sqrt(X(3)*X(3) + X(4)*X(4) + X(5)*X(5)) * 100.0;
 
-        ROS_INFO_STREAM(
-            "DBG-LM M="<<M
-            <<" dR="<<std::setprecision(3)<<std::fixed<<deltaR<<"deg"
-            <<" dT="<<deltaT<<"cm"
-            <<" X=["<<X(0)<<" "<<X(1)<<" "<<X(2)<<" | "<<X(3)<<" "<<X(4)<<" "<<X(5)<<"]"
-            <<" |r|mean="<<abs_mean<<" med="<<abs_med<<" p90="<<abs_p90
-            <<" lambda="<<lm_lambda
-        );
-
         if (deltaR < 0.05 && deltaT < 0.05) return true;
         return false;
     }
@@ -2348,10 +2317,6 @@ public:
         {
             kdtreeCornerFromMap->setInputCloud(laserCloudCornerFromMapDS);
             kdtreeSurfFromMap->setInputCloud(laserCloudSurfFromMapDS);
-
-            ROS_INFO_STREAM("[MAP] local DS sizes corner="<<laserCloudCornerFromMapDSNum
-                            <<" surf="<<laserCloudSurfFromMapDSNum
-                            <<" | lastDS corner/surf="<<laserCloudCornerLastDSNum<<"/"<<laserCloudSurfLastDSNum);
 
             const int max_iters = 20;
             for (int iterCount = 0; iterCount < max_iters; ++iterCount)
@@ -2391,13 +2356,6 @@ public:
                             <<"deg dT="<<dT<<"m | M="<<laserCloudOri->size());
 
             transformUpdate();
-        }
-        else
-        {
-            ROS_WARN_STREAM("Not enough features! edge="<<laserCloudCornerLastDSNum
-                            <<" (min "<<edgeFeatureMinValidNum<<")"
-                            <<", surf="<<laserCloudSurfLastDSNum
-                            <<" (min "<<surfFeatureMinValidNum<<")");
         }
     }
 

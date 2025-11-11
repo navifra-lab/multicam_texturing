@@ -138,6 +138,8 @@ public:
     float surroundingkeyframeAddingAngleThreshold; 
     float surroundingKeyframeDensity;
     float surroundingKeyframeSearchRadius;
+    float surroundingKeyframeSearchRadiusNarrow;
+    float KeyframeSearchRadius;
     
     // Loop closure
     bool  loopClosureEnableFlag;
@@ -145,6 +147,8 @@ public:
     int   surroundingKeyframeSize;
     float historyKeyframeSearchRadius;
     float loopClosureCorrespondenceDistance;
+    float loopClosureCorrespondenceDistanceNarrow;
+    float CorrespondenceDistance;
     float historyKeyframeSearchTimeDiff;
     int   historyKeyframeSearchNum;
     float historyKeyframeFitnessScore;
@@ -255,12 +259,14 @@ public:
         nh.param<float>("lio_sam/surroundingkeyframeAddingAngleThreshold", surroundingkeyframeAddingAngleThreshold, 0.2);
         nh.param<float>("lio_sam/surroundingKeyframeDensity", surroundingKeyframeDensity, 1.0);
         nh.param<float>("lio_sam/surroundingKeyframeSearchRadius", surroundingKeyframeSearchRadius, 50.0);
+        nh.param<float>("lio_sam/surroundingKeyframeSearchRadiusNarrow", surroundingKeyframeSearchRadiusNarrow, 50.0);
 
         nh.param<bool>("lio_sam/loopClosureEnableFlag", loopClosureEnableFlag, false);
         nh.param<float>("lio_sam/loopClosureFrequency", loopClosureFrequency, 1.0);
         nh.param<int>("lio_sam/surroundingKeyframeSize", surroundingKeyframeSize, 50);
         nh.param<float>("lio_sam/historyKeyframeSearchRadius", historyKeyframeSearchRadius, 10.0);
         nh.param<float>("lio_sam/loopClosureCorrespondenceDistance", loopClosureCorrespondenceDistance, 0.1);
+        nh.param<float>("lio_sam/loopClosureCorrespondenceDistanceNarrow", loopClosureCorrespondenceDistanceNarrow, 0.1);
         nh.param<float>("lio_sam/historyKeyframeSearchTimeDiff", historyKeyframeSearchTimeDiff, 30.0);
         nh.param<int>("lio_sam/historyKeyframeSearchNum", historyKeyframeSearchNum, 25);
         nh.param<float>("lio_sam/historyKeyframeFitnessScore", historyKeyframeFitnessScore, 0.3);
