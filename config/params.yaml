@@ -40,11 +40,13 @@ lio_sam:
     # Sensor Settings
     sensor: ouster                              # lidar sensor type, either 'velodyne', 'ouster' or 'livox'
     N_SCAN: 32                                    # number of lidar channels (i.e., Velodyne/Ouster: 16, 32, 64, 128, Livox Horizon: 6)
-    Horizon_SCAN: 2048                            # lidar horizontal resolution (Velodyne:1800, Ouster:512,1024,2048, Livox Horizon: 4000)
+    Horizon_SCAN: 1024                            # lidar horizontal resolution (Velodyne:1800, Ouster:512,1024,2048, Livox Horizon: 4000)
     downsampleRate: 1                             # default: 1. Downsample your data if too many
     # points. i.e., 16 = 64 / 4, 16 = 16 / 1
-    lidarMinRange: 0.5                         # default: 1.0, minimum lidar range to be used
-    lidarMaxRange: 80.0                       # default: 1000.0, maximum lidar range to be used
+    lidarMinRange: 0.25                         # default: 1.0, minimum lidar range to be used
+    lidarMaxRange: 100.0                       # default: 1000.0, maximum lidar range to be used
+
+    camtimeoffset: 0.0
 
     # IMU Settings
     # imuAccNoise: 3.9939570888238808e-02
@@ -66,17 +68,23 @@ lio_sam:
     extrinsicRPY: [ 0.0, 1.0,  0.0,
                     -1.0, 0.0,  0.0,
                     0.0, 0.0,  1.0 ]
+    # extrinsicRPY: [ 0.0, -1.0,  0.0,
+    #                 1.0, 0.0,  0.0,
+    #                 0.0, 0.0,  1.0 ]
+    # extrinsicRPY: [ 1.0, 0.0,  0.0,
+    #                 0.0, -1.0,  0.0,
+    #                 0.0, 0.0,  -1.0 ]
     
     # LOAM feature threshold
-    edgeThreshold: 1.0
-    surfThreshold: 0.1
+    edgeThreshold: 0.1 #1.0
+    surfThreshold: 0.1 #0.1
     edgeFeatureMinValidNum: 10
     surfFeatureMinValidNum: 100
 
     # voxel filter paprams
-    odometrySurfLeafSize: 0.1 #0.1 #0.05                     # default: 0.4 - outdoor, 0.2 - indoor
-    mappingCornerLeafSize: 0.05 #0.05 #0.025                    # default: 0.2 - outdoor, 0.1 - indoor
-    mappingSurfLeafSize: 0.1 #0.1 #0.05                      # default: 0.4 - outdoor, 0.2 - indoor
+    odometrySurfLeafSize: 0.1 #0.1 #0.2 #0.1 #0.1 #0.05                     # default: 0.4 - outdoor, 0.2 - indoor
+    mappingCornerLeafSize: 0.06 #0.05 #0.1 #0.05 #0.05 #0.025                    # default: 0.2 - outdoor, 0.1 - indoor
+    mappingSurfLeafSize: 0.1 #0.1 #0.2 #0.1 #0.1 #0.05                      # default: 0.4 - outdoor, 0.2 - indoor
     saveLeafSize : 0.5
 
     # robot motion constraint (in case you are using a 2D robot)
@@ -85,12 +93,12 @@ lio_sam:
 
     # CPU Params
     numberOfCores: 16                             # number of cores for mapping optimization
-    mappingProcessInterval: 0.1 #0.15                  # seconds, regulate mapping frequency
+    mappingProcessInterval: 0.08 #0.15                  # seconds, regulate mapping frequency
 
     # Surrounding map
-    surroundingkeyframeAddingDistThreshold: 0.1 #0.5 #1.0   # meters, regulate keyframe adding threshold
-    surroundingkeyframeAddingAngleThreshold: 0.02 #0.1  #0.2  # radians, regulate keyframe adding threshold
-    surroundingKeyframeDensity: 0.2  #2.0               # meters, downsample surrounding keyframe poses
+    surroundingkeyframeAddingDistThreshold: 1.0 #0.5 #1.0   # meters, regulate keyframe adding threshold
+    surroundingkeyframeAddingAngleThreshold: 0.1 #0.1  #0.2  # radians, regulate keyframe adding threshold
+    surroundingKeyframeDensity: 0.5  #1.0  #2.0               # meters, downsample surrounding keyframe poses
     surroundingKeyframeSearchRadius: 5.0  #50.0         # meters, within n meters scan-to-map optimization
     # (when loop closure disabled)
 
@@ -98,14 +106,14 @@ lio_sam:
     loopClosureEnableFlag: true
     loopClosureFrequency: 1.0                     # Hz, regulate loop closure constraint add frequency
     surroundingKeyframeSize: 50 #50                   # submap size (when loop closure enabled)
-    historyKeyframeSearchRadius: 15.0 #2.5 #15.0       # meters, key frame that is within n meters from
-    loopClosureCorrespondenceDistance: 0.1 #2.5 #15.0       # meters, key frame that is within n meters from
+    historyKeyframeSearchRadius: 6.0 #2.5 #15.0       # meters, key frame that is within n meters from
+    loopClosureCorrespondenceDistance: 5.0 #2.5 #15.0       # meters, key frame that is within n meters from
     # current pose will be considerd for loop closure
     historyKeyframeSearchTimeDiff: 30.0           # seconds, key frame that is n seconds older will be
     # considered for loop closure
-    historyKeyframeSearchNum: 25                  # number of hostory key frames will be fused into a
+    historyKeyframeSearchNum: 3 #20 #3                  # number of history key frames will be fused into a
     # submap for loop closure
-    historyKeyframeFitnessScore: 0.2 #0.3              # icp threshold, the smaller the better alignment
+    historyKeyframeFitnessScore: 0.2 #0.2 #0.3              # icp threshold, the smaller the better alignment
 
     # Visualization
     globalMapVisualizationSearchRadius: 1000.0    # meters, global map visualization radius
@@ -114,17 +122,89 @@ lio_sam:
 
     #Color Cloud
     cameraTopics: ["/camera_3/","/camera_2/","/camera_1/","/camera_0/"]
-    imageTopicLastName: "image_rect/compressed"
+    imageTopicLastName: "image_raw/compressed"
     cameraInfoTopicLastName: "camera_info"
 
+    # ------------------------------------------------------------------------------------------------------------------
+
+    # pinhole-radtan image_raw
+    # #T_c_l
+    # #cam1-1
+    # /camera_3/:
+    #  frame_id: "camera_3_frame"
+    #  width: 1920
+    #  height: 1200     
+    #  K: [1037.8190313339044, 0.0, 945.9394886083767, 0.0, 1043.4279596697074, 551.4645338833, 0.0, 0.0, 1.0]
+    #  D: [-0.27395838718631765, 0.05532122388862658, 0.00032129713117640737, -0.000509455269713209]
+    #  P: [1037.8190313339044,0.0,945.9394886083767,0.0,0.0,1043.4279596697074,551.4645338833,0.0,0.0,0.0,1.0,0.0]
+    #  x: 0.0
+    #  y: -0.13736
+    #  z: -0.2284
+    #  roll: 0.0933857
+    #  pitch: -1.5147014
+    #  yaw: 1.4772644
+     
+    # #cam1-2
+    # /camera_2/:
+    #  frame_id: "camera_2_frame"
+    #  width: 1920
+    #  height: 1200
+    #  K: [1084.7151791705576, 0.0, 949.3971976565025, 0.0, 1088.6623272421916, 613.6139962607863, 0.0, 0.0, 1.0]
+    #  D: [-0.27878091523299114, 0.05612219928072253, -0.00045554153255104765, 2.1162885863346754e-05]
+    #  P: [1084.7151791705576,0.0,949.3971976565025,0.0,0.0,1088.6623272421916,613.6139962607863,0.0,0.0,0.0,1.0,0.0]
+    #  x: 0.0031
+    #  y: -0.14456
+    #  z: -0.22404
+    #  roll: 1.5463612
+    #  pitch: 0.0148353
+    #  yaw: 0.0
+
+    # #cam1-4 ZYX
+    # /camera_1/:
+    #  frame_id: "camera_1_frame"
+    #  width: 1920
+    #  height: 1200
+    #  K: [1017.5264155124124, 0.0, 951.9670019638523, 0.0, 1022.6529851917977, 568.0428140878572, 0.0, 0.0, 1.0]
+    #  D: [-0.2692404041268705, 0.05302921442245397, 0.0016101486846077022, 2.2111382767323583e-05]
+    #  P: [1017.5264155124124,0.0,951.9670019638523,0.0,0.0,1022.6529851917977,568.0428140878572,0.0,0.0,0.0,1.0,0.0]
+    #  x: 0.0
+    #  y: -0.14
+    #  z: -0.23364
+    #  roll: -1.5498527
+    #  pitch: -0.0122173
+    #  yaw: -3.1415926
+
+
+    # #cam1-3
+    # /camera_0/:
+    #  frame_id: "camera_0_frame"
+    #  width: 1920
+    #  height: 1200
+    #  K: [1088.21541844378, 0.0, 934.3219474934396, 0.0, 1087.968120114456, 559.7270544929861, 0.0, 0.0, 1.0]
+    #  D: [-0.27510893945282366, 0.05278534649267778, 0.0008121467007336406, 0.0018316595176321156]
+    #  P: [1088.21541844378,0.0,934.3219474934396,0.0,0.0,1087.968120114456,559.7270544929861,0.0,0.0,0.0,1.0,0.0]
+    #  x: 0.0
+    #  y: -0.09024
+    #  z: -0.25211
+    #  roll: -3.0762619 #-2.3827559
+    #  pitch: 1.3346634 #1.5568481
+    #  yaw: 1.6379857 #2.3296817
+
+
+
+    # ------------------------------------------------------------------------------------------------------------------
+
+
+    # pinhole-equi image_raw
+    #T_c_l
     #cam1-1
     /camera_3/:
      frame_id: "camera_3_frame"
      width: 1920
      height: 1200     
-     K: [892.876190028821, 0.0, 921.9305344422798, 0.0, 889.7768251745282, 546.3007482270657, 0.0, 0.0, 1.0]
-     D: [0.0, 0.0, 0.0, 0.0]
-     P: [892.876190028821,0.0,921.9305344422798,0.0,0.0,889.7768251745282,546.3007482270657,0.0,0.0,0.0,1.0,0.0]
+     K: [1034.51180641, 0.0, 943.60820354, 0.0, 1032.41289325, 559.20477444, 0.0, 0.0, 1.0]
+     D: [-0.04240527, 0.00922551, -0.00849349, 0.00179313]
+     P: [1034.51180641,0.0,943.60820354,0.0,0.0,1032.41289325,559.20477444,0.0,0.0,0.0,1.0,0.0]
      x: 0.0
      y: -0.13736
      z: -0.2284
@@ -137,14 +217,14 @@ lio_sam:
      frame_id: "camera_2_frame"
      width: 1920
      height: 1200
-     K: [901.7897307707756, 0.0, 932.9338022610701, 0.0, 903.5743417052765, 617.7030873060298, 0.0, 0.0, 1.0]
-     D: [0.0, 0.0, 0.0, 0.0]
-     P: [901.7897307707756,0.0,932.9338022610701,0.0,0.0,903.5743417052765,617.7030873060298,0.0,0.0,0.0,1.0,0.0]
+     K: [1024.0254086, 0.0, 947.43142326, 0.0, 1026.39408325, 552.94010381, 0.0, 0.0, 1.0]
+     D: [-0.03550654, -0.00258824, 0.00770412, -0.00620576]
+     P: [1024.0254086,0.0,947.43142326359412601,0.0,0.0,1026.39408325,552.94010381,0.0,0.0,0.0,1.0,0.0]
      x: 0.0031
      y: -0.14456
      z: -0.22404
-     roll: 1.5481074
-     pitch: 0.0122173
+     roll: 1.5463612
+     pitch: 0.0148353
      yaw: 0.0
 
     #cam1-4 ZYX
@@ -152,9 +232,9 @@ lio_sam:
      frame_id: "camera_1_frame"
      width: 1920
      height: 1200
-     K: [874.9507060886988, 0.0, 942.9809828038187, 0.0, 872.6241208542509, 589.2538081803823, 0.0, 0.0, 1.0]
-     D: [0.0, 0.0, 0.0, 0.0]
-     P: [874.9507060886988,0.0,942.9809828038187,0.0,0.0,872.6241208542509,589.2538081803823,0.0,0.0,0.0,1.0,0.0]
+     K: [1013.79123509, 0.0, 951.8245492, 0.0, 1011.0954584, 591.99715282, 0.0, 0.0, 1.0]
+     D: [-0.03485084, -0.00257264, 0.00193454, -0.00158137]
+     P: [1013.79123509,0.0,951.8245492,0.0,0.0,1011.0954584,591.99715282,0.0,0.0,0.0,1.0,0.0]
      x: 0.0
      y: -0.14
      z: -0.23364
@@ -168,15 +248,147 @@ lio_sam:
      frame_id: "camera_0_frame"
      width: 1920
      height: 1200
-     K: [864.8812950603922, 0.0, 979.3377270889724, 0.0, 862.9745765328845, 581.342325233726, 0.0, 0.0, 1.0]
-     D: [0.0, 0.0, 0.0, 0.0]
-     P: [864.8812950603922,0.0,979.3377270889724,0.0,0.0,862.9745765328845,581.342325233726,0.0,0.0,0.0,1.0,0.0]
+     K: [1014.30204962, 0.0, 969.26756487, 0.0, 1011.91480505, 585.19813029, 0.0, 0.0, 1.0]
+     D: [-0.03022055, -0.00936362, 0.00675302, -0.00330184]
+     P: [1014.30204962,0.0,969.26756487,0.0,0.0,1011.91480505,585.19813029,0.0,0.0,0.0,1.0,0.0]
      x: 0.0
      y: -0.09024
      z: -0.25211
      roll: -3.0762619 #-2.3827559
      pitch: 1.3346634 #1.5568481
      yaw: 1.6379857 #2.3296817
+
+     # ------------------------------------------------------------------------------------------------------------------
+
+     # pinhole-equi image_rect
+    # #T_c_l
+    # #cam1-1
+    # /camera_3/:
+    #  frame_id: "camera_3_frame"
+    #  width: 1920
+    #  height: 1200     
+    #  K: [895.726, 0.0, 927.089, 0.0, 893.909, 545.868, 0.0, 0.0, 1.0]
+    #  D: [0.0, 0.0, 0.0, 0.0]
+    #  P: [895.726,0.0,927.089,0.0,0.0,893.909,545.868,0.0,0.0,0.0,1.0,0.0]
+    #  x: 0.0
+    #  y: -0.13736
+    #  z: -0.2284
+    #  roll: 0.0933857
+    #  pitch: -1.5147014
+    #  yaw: 1.4772644
+     
+    # #cam1-2
+    # /camera_2/:
+    #  frame_id: "camera_2_frame"
+    #  width: 1920
+    #  height: 1200
+    #  K: [890.724, 0.0, 934.419, 0.0, 892.785, 537.089, 0.0, 0.0, 1.0]
+    #  D: [0.0, 0.0, 0.0, 0.0]
+    #  P: [890.724,0.0,934.419,0.0,0.0,892.785,537.089,0.0,0.0,0.0,1.0,0.0]
+    #  x: 0.0031
+    #  y: -0.14456
+    #  z: -0.22404
+    #  roll: 1.5463612
+    #  pitch: 0.0148353
+    #  yaw: 0.0
+
+    # #cam1-3
+    # /camera_0/:
+    #  frame_id: "camera_0_frame"
+    #  width: 1920
+    #  height: 1200
+    #  K: [877.007, 0.0, 979.262, 0.0, 874.943, 580.15, 0.0, 0.0, 1.0]
+    #  D: [0.0, 0.0, 0.0, 0.0]
+    #  P: [877.007,0.0,979.262,0.0,0.0,874.943,580.15,0.0,0.0,0.0,1.0,0.0]
+    #  x: 0.0
+    #  y: -0.09024
+    #  z: -0.25211
+    #  roll: -3.0762619 #-2.3827559
+    #  pitch: 1.3346634 #1.5568481
+    #  yaw: 1.6379857 #2.3296817
+
+    # #cam1-4 ZYX
+    # /camera_1/:
+    #  frame_id: "camera_1_frame"
+    #  width: 1920
+    #  height: 1200
+    #  K: [874.951, 0.0, 942.981, 0.0, 872.624, 589.254, 0.0, 0.0, 1.0]
+    #  D: [0.0, 0.0, 0.0, 0.0]
+    #  P: [874.951,0.0,942.981,0.0,0.0,872.624,589.254,0.0,0.0,0.0,1.0,0.0]
+    #  x: 0.0
+    #  y: -0.14
+    #  z: -0.23364
+    #  roll: -1.5498527
+    #  pitch: -0.0122173
+    #  yaw: -3.1415926
+
+
+    # ------------------------------------------------------------------------------------------------------------------
+
+    
+    # pinhole-equi image_rect before
+    # #T_c_l
+    # #cam1-1
+    # /camera_3/:
+    #  frame_id: "camera_3_frame"
+    #  width: 1920
+    #  height: 1200     
+    #  K: [994.4976806640625, 0.0, 937.5776626840889, 0.0, 1014.7119140625, 558.7966586611583, 0.0, 0.0, 1.0]
+    #  D: [0.0, 0.0, 0.0, 0.0]
+    #  P: [994.4976806640625,0.0,937.5776626840889,0.0,0.0,1014.7119140625,558.7966586611583,0.0,0.0,0.0,1.0,0.0]
+    #  x: 0.0
+    #  y: -0.13736
+    #  z: -0.2284
+    #  roll: 0.0933857
+    #  pitch: -1.5147014
+    #  yaw: 1.4772644
+     
+    # #cam1-2
+    # /camera_2/:
+    #  frame_id: "camera_2_frame"
+    #  width: 1920
+    #  height: 1200
+    #  K: [992.9432373046875, 0.0, 935.9723359412601, 0.0, 1019.9133911132812, 619.6279194937997, 0.0, 0.0, 1.0]
+    #  D: [0.0, 0.0, 0.0, 0.0]
+    #  P: [992.9432373046875,0.0,935.9723359412601,0.0,0.0,1019.9133911132812,619.6279194937997,0.0,0.0,0.0,1.0,0.0]
+    #  x: 0.0031
+    #  y: -0.14456
+    #  z: -0.22404
+    #  roll: 1.5463612
+    #  pitch: 0.0148353
+    #  yaw: 0.0
+
+    # #cam1-4 ZYX
+    # /camera_1/:
+    #  frame_id: "camera_1_frame"
+    #  width: 1920
+    #  height: 1200
+    #  K: [976.6070556640625, 0.0, 945.5796180587276, 0.0, 997.2250366210938, 593.4603739030172, 0.0, 0.0, 1.0]
+    #  D: [0.0, 0.0, 0.0, 0.0]
+    #  P: [976.6070556640625,0.0,945.5796180587276,0.0,0.0,997.2250366210938,593.4603739030172,0.0,0.0,0.0,1.0,0.0]
+    #  x: 0.0
+    #  y: -0.14
+    #  z: -0.23364
+    #  roll: -1.5498527
+    #  pitch: -0.0122173
+    #  yaw: -3.1415926
+
+
+    # #cam1-3
+    # /camera_0/:
+    #  frame_id: "camera_0_frame"
+    #  width: 1920
+    #  height: 1200
+    #  K: [962.035888671875, 0.0, 942.175783044222, 0.0, 989.00341796875, 609.7005842575454, 0.0, 0.0, 1.0]
+    #  D: [0.0, 0.0, 0.0, 0.0]
+    #  P: [962.035888671875,0.0,942.175783044222,0.0,0.0,989.00341796875,609.7005842575454,0.0,0.0,0.0,1.0,0.0]
+    #  x: 0.0
+    #  y: -0.09024
+    #  z: -0.25211
+    #  roll: -3.0762619 #-2.3827559
+    #  pitch: 1.3346634 #1.5568481
+    #  yaw: 1.6379857 #2.3296817
+
 
 
 

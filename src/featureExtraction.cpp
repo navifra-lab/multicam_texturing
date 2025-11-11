@@ -237,16 +237,6 @@ public:
         outInfo.cloud_surface = publishCloud(pubSurfacePoints, s_merged, outHeader.stamp, lidarFrame);
         outInfo.cloud_good = publishCloud(pubGoodPoints, g_merged, outHeader.stamp, lidarFrame);
 
-        // pcl::io::savePCDFileBinary("/dataset/0825/pcd/corner1.pcd", *o1.corner);
-        // pcl::io::savePCDFileBinary("/dataset/0825/pcd/surf1.pcd", *o1.surface);
-        // pcl::io::savePCDFileBinary("/dataset/0825/pcd/good1.pcd", *o1.good);
-        // pcl::io::savePCDFileBinary("/dataset/0825/pcd/corner2.pcd", *c2_in1);
-        // pcl::io::savePCDFileBinary("/dataset/0825/pcd/surf2.pcd", *s2_in1);
-        // pcl::io::savePCDFileBinary("/dataset/0825/pcd/good2.pcd", *g2_in1);
-        // pcl::io::savePCDFileBinary("/dataset/0825/pcd/corner3.pcd", *c_merged);
-        // pcl::io::savePCDFileBinary("/dataset/0825/pcd/surf3.pcd", *s_merged);
-        // pcl::io::savePCDFileBinary("/dataset/0825/pcd/good3.pcd", *g_merged);
-
         freeCloudInfoMemory();
 
         pubLaserCloudInfo.publish(outInfo);
@@ -270,9 +260,9 @@ public:
 
     void laserCloudInfoHandler(const lio_sam::cloud_infoConstPtr& msgIn)
     {
-        cloudInfo = *msgIn; // new cloud info
-        cloudHeader = msgIn->header; // new cloud header
-        pcl::fromROSMsg(msgIn->cloud_deskewed, *extractedCloud); // new cloud for extraction
+        cloudInfo = *msgIn;
+        cloudHeader = msgIn->header;
+        pcl::fromROSMsg(msgIn->cloud_deskewed, *extractedCloud);
 
         calculateSmoothness();
 
@@ -297,11 +287,10 @@ public:
                             + cloudInfo.pointRange[i+3] + cloudInfo.pointRange[i+4]
                             + cloudInfo.pointRange[i+5];            
 
-            cloudCurvature[i] = diffRange*diffRange;//diffX * diffX + diffY * diffY + diffZ * diffZ;
+            cloudCurvature[i] = diffRange*diffRange;
 
             cloudNeighborPicked[i] = 0;
             cloudLabel[i] = 0;
-            // cloudSmoothness for sorting
             cloudSmoothness[i].value = cloudCurvature[i];
             cloudSmoothness[i].ind = i;
         }

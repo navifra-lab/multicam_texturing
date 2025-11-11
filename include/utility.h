@@ -97,6 +97,7 @@ public:
     int downsampleRate;
     float lidarMinRange;
     float lidarMaxRange;
+    float camtimeoffset;
 
     // IMU
     float imuAccNoise;
@@ -216,7 +217,8 @@ public:
         nh.param<int>("lio_sam/Horizon_SCAN", Horizon_SCAN, 1800);
         nh.param<int>("lio_sam/downsampleRate", downsampleRate, 1);
         nh.param<float>("lio_sam/lidarMinRange", lidarMinRange, 1.0);
-        nh.param<float>("lio_sam/lidarMaxRange", lidarMaxRange, 1000.0);
+        nh.param<float>("lio_sam/lidarMaxRange", lidarMaxRange, 1000.0);        
+        nh.param<float>("lio_sam/camtimeoffset", camtimeoffset, 1000.0);
 
         nh.param<float>("lio_sam/imuAccNoise", imuAccNoise, 0.01);
         nh.param<float>("lio_sam/imuGyrNoise", imuGyrNoise, 0.001);

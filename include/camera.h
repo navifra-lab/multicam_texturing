@@ -65,7 +65,7 @@ public:
             cv::Mat compressed(1, static_cast<int>(msg->data.size()), CV_8UC1,
                                const_cast<unsigned char*>(msg->data.data()));
             cv_image_ = cv::imdecode(compressed, cv::IMREAD_COLOR);
-            cv::imwrite("/dataset/ros1/1/0.jpg",cv_image_);
+            // cv::imwrite("/dataset/ros1/1/0.jpg",cv_image_);
 
             if (cv_image_.empty()) {
                 ROS_WARN("Failed to decode compressed image");
@@ -76,9 +76,9 @@ public:
                 return;
             }
 
-            // cv::Mat undistorted;
-            // cv::remap(cv_image_, undistorted, map1, map2, cv::INTER_LINEAR, cv::BORDER_CONSTANT);
-            // cv_image_ = undistorted;
+            cv::Mat undistorted;
+            cv::remap(cv_image_, undistorted, map1, map2, cv::INTER_LINEAR, cv::BORDER_CONSTANT);
+            cv_image_ = undistorted;
 
             // cv::fisheye::undistortImage(cv_image_, cv_image_, get_camera_matrix_cv(), get_distortion_matrix_cv());
         }
@@ -128,12 +128,7 @@ public:
                                  msg->R[3], msg->R[4], msg->R[5],
                                  msg->R[6], msg->R[7], msg->R[8];
 
-        projection_matrix_.setZero();
-        projection_matrix_(0,0) = msg->P[0];
-        projection_matrix_(0,2) = msg->P[2];
-        projection_matrix_(1,1) = msg->P[5];
-        projection_matrix_(1,2) = msg->P[6];
-        projection_matrix_(2,2) = 1.0;
+
 
         if (msg->D.size() >= 4) {
             distortion_matrix_(0,0) = msg->D[0];
@@ -151,15 +146,43 @@ public:
         cv::Size image_size(static_cast<int>(image_width_), static_cast<int>(image_height_));
         cv::Mat R = cv::Mat::eye(3,3,CV_64F);
 
+        // cv::fisheye::initUndistortRectifyMap(
+        //     camera_matrix_cv_,     
+        //     distortion_matrix_cv_, 
+        //     R,                  
+        //     camera_matrix_cv_,  
+        //     image_size,
+        //     CV_16SC2,
+        //     map1, map2
+        // );
+
+        // newK = cv::getOptimalNewCameraMatrix(
+        //     camera_matrix_cv_,     // K
+        //     distortion_matrix_cv_, // D (radtan: [k1,k2,p1,p2(,k3...)]
+        //     image_size,
+        //     0.0, // alpha (0~1)
+        //     image_size,
+        //     nullptr, 
+        //     true     // centerPrincipalPoint
+        // );
+
+        // cv::initUndistortRectifyMap(
+        //     camera_matrix_cv_, distortion_matrix_cv_, cv::Mat::eye(3, 3, CV_64F), newK,
+        //     image_size, CV_16SC2, map1, map2);
+
+        cv::fisheye::estimateNewCameraMatrixForUndistortRectify(
+            camera_matrix_cv_, distortion_matrix_cv_, image_size, cv::Matx33d::eye(), newK, 0.0);
+
         cv::fisheye::initUndistortRectifyMap(
-            camera_matrix_cv_,     
-            distortion_matrix_cv_, 
-            R,                  
-            camera_matrix_cv_,  
-            image_size,
-            CV_16SC2,
-            map1, map2
-        );
+            camera_matrix_cv_, distortion_matrix_cv_, cv::Matx33d::eye(), newK, image_size, CV_16SC2, map1, map2);
+
+
+        projection_matrix_.setZero();
+        projection_matrix_(0, 0) = newK.at<double>(0, 0);
+        projection_matrix_(0, 2) = newK.at<double>(0, 2);
+        projection_matrix_(1, 1) = newK.at<double>(1, 1);
+        projection_matrix_(1, 2) = newK.at<double>(1, 2);
+        projection_matrix_(2, 2) = 1.0;
 
         is_map_initialized_  = true;
         is_info_initialized_ = true;
@@ -167,7 +190,7 @@ public:
 
     void set_lidar_to_camera_matrix(geometry_msgs::TransformStamped& msg) {
         Eigen::Affine3d affine = tf2::transformToEigen(msg);
-        lidar_to_camera_matrix_ = affine.matrix();
+        lidar_to_camera_matrix_ = affine.matrix();  //T_c_l
         is_transform_initialized_ = true;
     }
 
@@ -202,6 +225,7 @@ public:
 
     Eigen::Matrix<double,3,3> get_camera_matrix()               { return camera_matrix_; }
     cv::Mat                   get_camera_matrix_cv()             { return camera_matrix_cv_; }
+    cv::Mat                   get_undistortion_camera_matrix_cv(){ return newK; }
     Eigen::Matrix<double,3,3> get_rectification_matrix()         { return rectification_matrix_; }
     Eigen::Matrix<double,3,4> get_projection_matrix()            { return projection_matrix_; }
     Eigen::Matrix<double,1,4> get_distortion_matrix()            { return distortion_matrix_; }
@@ -209,14 +233,11 @@ public:
     Eigen::Matrix4d           get_lidar_to_camera_matrix()       { return lidar_to_camera_matrix_; }
     Eigen::Matrix<double,3,4> get_lidar_to_camera_projection_matrix() { return lidar_to_camera_projection_matrix_; }
 
-    // --- Image buffer APIs (thread-safe) ---
-    void push_compressed(const sensor_msgs::CompressedImageConstPtr &msg, size_t max_buf)
+    void push_keep_all(const sensor_msgs::CompressedImagePtr &img)
     {
-        std::lock_guard<std::mutex> lk(buf_mtx_);
-        compressed_buffer_.push_back(msg);
-        while (compressed_buffer_.size() > max_buf)
-            compressed_buffer_.pop_front();
+        compressed_buffer_.push_back(img); 
     }
+
     size_t buf_size() const
     {
         std::lock_guard<std::mutex> lk(buf_mtx_);
@@ -304,7 +325,7 @@ private:
     Eigen::Matrix4d lidar_to_camera_matrix_ = Eigen::Matrix4d::Identity();
     Eigen::Matrix<double,3,4> lidar_to_camera_projection_matrix_;
 
-    cv::Mat map1, map2;
+    cv::Mat map1, map2, newK;
 
     mutable std::mutex buf_mtx_;
     std::deque<sensor_msgs::CompressedImageConstPtr> compressed_buffer_;

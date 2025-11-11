@@ -69,6 +69,19 @@
         "cinttypes": "cpp",
         "typeindex": "cpp",
         "typeinfo": "cpp",
-        "variant": "cpp"
+        "variant": "cpp",
+        "codecvt": "cpp",
+        "__nullptr": "cpp",
+        "ios": "cpp",
+        "__hash_table": "cpp",
+        "__split_buffer": "cpp",
+        "__bit_reference": "cpp",
+        "__tree": "cpp",
+        "filesystem": "cpp",
+        "__locale": "cpp",
+        "queue": "cpp",
+        "stack": "cpp",
+        "__node_handle": "cpp",
+        "locale": "cpp"
     }
 }
