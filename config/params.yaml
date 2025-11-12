@@ -43,8 +43,8 @@ lio_sam:
     Horizon_SCAN: 1024                            # lidar horizontal resolution (Velodyne:1800, Ouster:512,1024,2048, Livox Horizon: 4000)
     downsampleRate: 1                             # default: 1. Downsample your data if too many
     # points. i.e., 16 = 64 / 4, 16 = 16 / 1
-    lidarMinRange: 0.25                         # default: 1.0, minimum lidar range to be used
-    lidarMaxRange: 100.0                       # default: 1000.0, maximum lidar range to be used
+    lidarMinRange: 0.5                         # default: 1.0, minimum lidar range to be used
+    lidarMaxRange: 80.0                       # default: 1000.0, maximum lidar range to be used
 
     camtimeoffset: 0.0
 
@@ -77,7 +77,7 @@ lio_sam:
     
     # LOAM feature threshold
     edgeThreshold: 0.1 #1.0
-    surfThreshold: 0.1 #0.1
+    surfThreshold: 0.07 #0.1
     edgeFeatureMinValidNum: 10
     surfFeatureMinValidNum: 100
 

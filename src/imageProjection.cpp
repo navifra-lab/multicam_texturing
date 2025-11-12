@@ -64,10 +64,14 @@
         std::deque<sensor_msgs::PointCloud2> cloudQueue;
         sensor_msgs::PointCloud2 currentCloudMsg;
 
-        double *imuTime = new double[queueLength];
-        double *imuRotX = new double[queueLength];
-        double *imuRotY = new double[queueLength];
-        double *imuRotZ = new double[queueLength];
+        // double *imuTime = new double[queueLength];
+        // double *imuRotX = new double[queueLength];
+        // double *imuRotY = new double[queueLength];
+        // double *imuRotZ = new double[queueLength];
+        std::array<double, queueLength> imuTime{};
+        std::array<double, queueLength> imuRotX{};
+        std::array<double, queueLength> imuRotY{};
+        std::array<double, queueLength> imuRotZ{};
 
         int imuPointerCur;
         bool firstPointFlag;
@@ -92,9 +96,6 @@
         std_msgs::Header cloudHeader;
 
         vector<int> columnIdnCountVec;
-
-        tf2_ros::Buffer tfBuffer;
-        tf2_ros::TransformListener tfListener{tfBuffer};
 
         using PC2 = sensor_msgs::PointCloud2;
         using ApproxPolicy = message_filters::sync_policies::ApproximateTime<PC2, PC2>;
@@ -137,48 +138,6 @@
             resetParameters();
 
             pcl::console::setVerbosityLevel(pcl::console::L_ERROR);
-        }
-
-        static bool transformPCL2_XYZ(const pcl::PCLPointCloud2 &in, pcl::PCLPointCloud2 &out, const Eigen::Matrix4f &T)
-        {
-            out = in;
-            int idx_x = pcl::getFieldIndex(out, "x");
-            int idx_y = pcl::getFieldIndex(out, "y");
-            int idx_z = pcl::getFieldIndex(out, "z");
-            if (idx_x < 0 || idx_y < 0 || idx_z < 0)
-            {
-                ROS_WARN_THROTTLE(1.0, "[merge] x/y/z field missing in PCLPointCloud2");
-                return false;
-            }
-            const auto &fx = out.fields[idx_x], &fy = out.fields[idx_y], &fz = out.fields[idx_z];
-            if (fx.datatype != pcl::PCLPointField::FLOAT32 ||
-                fy.datatype != pcl::PCLPointField::FLOAT32 ||
-                fz.datatype != pcl::PCLPointField::FLOAT32)
-            {
-                ROS_WARN_THROTTLE(1.0, "[merge] x/y/z not FLOAT32");
-                return false;
-            }
-
-            const size_t n = static_cast<size_t>(out.width) * out.height;
-            const size_t step = out.point_step;
-
-            const float r00 = T(0, 0), r01 = T(0, 1), r02 = T(0, 2), tx = T(0, 3);
-            const float r10 = T(1, 0), r11 = T(1, 1), r12 = T(1, 2), ty = T(1, 3);
-            const float r20 = T(2, 0), r21 = T(2, 1), r22 = T(2, 2), tz = T(2, 3);
-
-            for (size_t i = 0; i < n; ++i)
-            {
-                uint8_t *base = &out.data[i * step];
-                float *px = reinterpret_cast<float *>(base + fx.offset);
-                float *py = reinterpret_cast<float *>(base + fy.offset);
-                float *pz = reinterpret_cast<float *>(base + fz.offset);
-                const float x = *px, y = *py, z = *pz;
-
-                *px = r00 * x + r01 * y + r02 * z + tx;
-                *py = r10 * x + r11 * y + r12 * z + ty;
-                *pz = r20 * x + r21 * y + r22 * z + tz;
-            }
-            return true;
         }
 
         bool processAndPublishOne(const sensor_msgs::PointCloud2::ConstPtr &msg, ros::Publisher &pubCloud, ros::Publisher &pubInfo, const std::string &frame_id_suffix, std::deque<sensor_msgs::Imu> &imuQueueRef)

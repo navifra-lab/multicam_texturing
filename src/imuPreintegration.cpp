@@ -195,8 +195,6 @@ public:
     gtsam::imuBias::ConstantBias prevBiasOdom;
 
     bool doneFirstOpt = false;
-    double lastImuT_imu = -1;
-    double lastImuT_opt = -1;
     double imuHz = 500;
 
 
@@ -255,7 +253,6 @@ public:
 
     void resetParams()
     {
-        lastImuT_imu = -1;
         doneFirstOpt = false;
         systemInitialized = false;
     }
