@@ -210,6 +210,29 @@ public:
         is_transform_initialized_ = true;
     }
 
+    void set_lidar_to_camera_matrix_xyzquat(double x, double y, double z,
+                                            double qx, double qy, double qz, double qw)
+    {
+        // Eigen::Quaterniond는 (w, x, y, z) 순서
+        Eigen::Quaterniond q(qw, qx, qy, qz);
+
+        // 안전장치: 0-노름 방지 및 정규화
+        const double n = q.norm();
+        if (n < 1e-12)
+        {
+            throw std::runtime_error("Invalid quaternion: norm is too small.");
+        }
+        q.normalize();
+
+        const Eigen::Matrix3d R = q.toRotationMatrix();
+
+        lidar_to_camera_matrix_.setIdentity();
+        lidar_to_camera_matrix_.block<3, 3>(0, 0) = R;
+        lidar_to_camera_matrix_.block<3, 1>(0, 3) = Eigen::Vector3d(x, y, z);
+
+        is_transform_initialized_ = true;
+    }
+
     void set_lidar_to_camera_projection_matrix() {
         Eigen::Matrix4d T_lc_inv = lidar_to_camera_matrix_;
         lidar_to_camera_projection_matrix_ = projection_matrix_ * T_lc_inv.block<4,4>(0,0);

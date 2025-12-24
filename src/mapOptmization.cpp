@@ -1,5 +1,5 @@
-#define ENABLE_DEBUG_SCAN_PCD_SAVE 0
-#define ENABLE_DEBUG_EACH_CAM_PCD_SAVE 0
+#define ENABLE_DEBUG_SCAN_PCD_SAVE 1
+#define ENABLE_DEBUG_EACH_CAM_PCD_SAVE 1
 #define ENABLE_DEBUG_LOOP_PCD_SAVE 0
 #define ENABLE_DEBUG_SUBMAP_PCD_SAVE 0
 #define ENABLE_DEBUG_CURRENT_SCAN_PCD_SAVE 0
@@ -43,6 +43,7 @@ using symbol_shorthand::X; // Pose3 (x,y,z,r,p,y)
 int kfidx=0;
 int loopidx =0;
 int imgidx=0;
+int frameidx=0;
 
 bool isnarrow=false;
 
@@ -193,14 +194,6 @@ public:
     ros::Timer camera_timer_;
     std::string saveNodePCDDirectory;
 
-    struct CamSyncState
-    {
-        bool synced = false;     
-        double phase_offset = 0.0; // image_time - lidar_tim
-        double last_img_time = std::numeric_limits<double>::quiet_NaN();
-    };
-
-    std::map<std::string, CamSyncState> cam_states_;
     std::map<std::string, std::mutex> cam_mtx_;
 
     size_t nearestIndexInBuffer(const std::string &cam_key, double lidar_time)
@@ -266,7 +259,20 @@ public:
         auto img = cam->buf_at(idx);
 
         double dt = img->header.stamp.toSec() - lidar_time;
-        // std::cout<<std::fixed << std::setprecision(4)<<cam_key<<" : "<<img->header.stamp.toSec()<<", lidar : "<<lidar_time<<", cam-lidar : "<<dt<<std::endl;
+        std::cout<<std::fixed << std::setprecision(5)<<"cur "<<cam_key<<" : "<<img->header.stamp.toSec()<<", lidar : "<<lidar_time<<", cam-lidar : "<<dt<<std::endl;
+        if(idx>0)
+        {
+            auto img2 = cam->buf_at(idx-1);
+            double dt2 = img2->header.stamp.toSec() - lidar_time;
+            std::cout<<std::fixed << std::setprecision(5)<<"prev "<<cam_key<<" : "<<img2->header.stamp.toSec()<<", lidar : "<<lidar_time<<", cam-lidar : "<<dt2<<std::endl;
+        }
+
+        if (idx + 1 < cam->buf_size())
+        {
+            auto img3 = cam->buf_at(idx + 1);
+            double dt3 = img3->header.stamp.toSec() - lidar_time;
+            std::cout << std::fixed << std::setprecision(5) << "next " << cam_key << " : " << img3->header.stamp.toSec() << ", lidar : " << lidar_time << ", cam-lidar : " << dt3 << std::endl;
+        }
 
         return img;
     }
@@ -404,17 +410,23 @@ public:
                 cam_info->P[i] = P_vec[i];
 
             double x = 0.0, y = 0.0, z = 0.0;
-            double roll = 0.0, pitch = 0.0, yaw = 0.0;
+            // double roll = 0.0, pitch = 0.0, yaw = 0.0;
+            double qx = 0.0, qy = 0.0, qz = 0.0, qw = 1.0;
             nh.param<double>(camera_topic + "/x", x, 0.0);
             nh.param<double>(camera_topic + "/y", y, 0.0);
             nh.param<double>(camera_topic + "/z", z, 0.0);
-            nh.param<double>(camera_topic + "/roll", roll, 0.0);
-            nh.param<double>(camera_topic + "/pitch", pitch, 0.0);
-            nh.param<double>(camera_topic + "/yaw", yaw, 0.0);
+            // nh.param<double>(camera_topic + "/roll", roll, 0.0);
+            // nh.param<double>(camera_topic + "/pitch", pitch, 0.0);
+            // nh.param<double>(camera_topic + "/yaw", yaw, 0.0);
+            nh.param<double>(camera_topic + "/qx", qx, 0.0);
+            nh.param<double>(camera_topic + "/qy", qy, 0.0);
+            nh.param<double>(camera_topic + "/qz", qz, 0.0);
+            nh.param<double>(camera_topic + "/qw", qw, 1.0);
 
             camera_type_stdmap_[camera_topic]->set_camera_info(cam_info);
             camera_type_stdmap_[camera_topic]->set_camera_utils(cam_info);
-            camera_type_stdmap_[camera_topic]->set_lidar_to_camera_matrix_xyzrpy_rad(x, y, z, roll, pitch, yaw);
+            // camera_type_stdmap_[camera_topic]->set_lidar_to_camera_matrix_xyzrpy_rad(x, y, z, roll, pitch, yaw);
+            camera_type_stdmap_[camera_topic]->set_lidar_to_camera_matrix_xyzquat(x, y, z, qx, qy, qz, qw);
             camera_type_stdmap_[camera_topic]->set_lidar_to_camera_projection_matrix();
         }
 
@@ -464,39 +476,39 @@ public:
                    << p.roll << " " << p.pitch << " " << p.yaw << "\n";
         }           
         
-        for (int i = 0; i < num; ++i)
-        {
-            if (i < static_cast<int>(rawCloudKeyFrames.size()) && rawCloudKeyFrames[i])
-            {
-                std::ostringstream oss;
-                std::ostringstream oss2;
-                oss << frames_dir << "frame_" << std::setw(6) << std::setfill('0') << i << ".pcd";
-                oss2 << frames_dir << "rawframe_" << std::setw(6) << std::setfill('0') << i << ".pcd";
-                // pcl::io::savePCDFileBinary(oss.str(), *rawCloudKeyFrames[i]);
+        // for (int i = 0; i < num; ++i)
+        // {
+        //     if (i < static_cast<int>(rawCloudKeyFrames.size()) && rawCloudKeyFrames[i])
+        //     {
+        //         std::ostringstream oss;
+        //         std::ostringstream oss2;
+        //         oss << frames_dir << "frame_" << std::setw(6) << std::setfill('0') << i << ".pcd";
+        //         oss2 << frames_dir << "rawframe_" << std::setw(6) << std::setfill('0') << i << ".pcd";
+        //         // pcl::io::savePCDFileBinary(oss.str(), *rawCloudKeyFrames[i]);
 
-                pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
-                pcl::PointCloud<pcl::PointXYZRGB>::Ptr rawcloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+        //         pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+        //         pcl::PointCloud<pcl::PointXYZRGB>::Ptr rawcloud(new pcl::PointCloud<pcl::PointXYZRGB>());
 
-                *rawcloud = *rawCloudKeyFrames[i];                
-                *cloud = *transformPointCloud(rawCloudKeyFrames[i], &cloudKeyPoses6D->points[i]);
+        //         *rawcloud = *rawCloudKeyFrames[i];                
+        //         *cloud = *transformPointCloud(rawCloudKeyFrames[i], &cloudKeyPoses6D->points[i]);
 
-                std::vector<int> indices;
-                pcl::removeNaNFromPointCloud(*cloud, *cloud, indices);
+        //         std::vector<int> indices;
+        //         pcl::removeNaNFromPointCloud(*cloud, *cloud, indices);
 
-                cloud->width = cloud->points.size();
-                cloud->height = 1;
-                cloud->is_dense = true;
+        //         cloud->width = cloud->points.size();
+        //         cloud->height = 1;
+        //         cloud->is_dense = true;
 
-                std::vector<int> indices_raw;
-                pcl::removeNaNFromPointCloud(*rawcloud, *rawcloud, indices_raw);
-                rawcloud->width = rawcloud->points.size();
-                rawcloud->height = 1;
-                rawcloud->is_dense = true;
+        //         std::vector<int> indices_raw;
+        //         pcl::removeNaNFromPointCloud(*rawcloud, *rawcloud, indices_raw);
+        //         rawcloud->width = rawcloud->points.size();
+        //         rawcloud->height = 1;
+        //         rawcloud->is_dense = true;
 
-                pcl::io::savePCDFileBinary(oss.str(), *cloud);
-                pcl::io::savePCDFileBinary(oss2.str(), *rawcloud);
-            }
-        }
+        //         pcl::io::savePCDFileBinary(oss.str(), *cloud);
+        //         pcl::io::savePCDFileBinary(oss2.str(), *rawcloud);
+        //     }
+        // }
         for (int i = 0; i < num; ++i)
         {
             if (i < static_cast<int>(keyframeImageTimestamp.size()))
@@ -697,6 +709,14 @@ public:
 
                           cam->set_cv_image_from_compressed(img_msg);
                           const cv::Mat &image = cam->get_cv_image();
+                          const int img_w = image.cols;
+                          const int img_h = image.rows;
+                          const int mask_h = static_cast<int>(img_h * 0.10);
+                          const int mask_w = static_cast<int>(img_w * 0.45);
+                          const int mask_x0 = (img_w - mask_w) / 2;
+                          const int mask_x1 = mask_x0 + mask_w;
+                          const int mask_y0 = img_h - mask_h;
+
                           if (image.empty() || image.type() != CV_8UC3)
                               return;
 
@@ -756,26 +776,26 @@ public:
                                   out.insert(out.end(), local.begin(), local.end());
                               }
 
-#if ENABLE_DEBUG_EACH_CAM_PCD_SAVE
-                              {
-                                  std::cout << cam_key << " : " << img_msg->header.stamp << ", " << std::endl;
-                                  std::string save_dir = "/dataset/test/vdbfusion/debug_corner";
-                                  fs::create_directories(save_dir);
+// #if ENABLE_DEBUG_EACH_CAM_PCD_SAVE
+//                               {
+//                                   std::cout << cam_key << " : " << img_msg->header.stamp << ", " << std::endl;
+//                                   std::string save_dir = "/dataset/test/vdbfusion/debug_corner";
+//                                   fs::create_directories(save_dir);
 
-                                  char filename[256];
-                                  snprintf(filename, sizeof(filename), "%s%s_%.6f.ply",
-                                           save_dir.c_str(), cam_key.c_str(), lidar_time);
+//                                   char filename[256];
+//                                   snprintf(filename, sizeof(filename), "%s%s_%.6f.ply",
+//                                            save_dir.c_str(), cam_key.c_str(), lidar_time);
 
-                                  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_out(new pcl::PointCloud<pcl::PointXYZRGB>());
-                                  cloud_out->points.assign(out.begin(), out.end());
-                                  cloud_out->width = cloud_out->points.size();
-                                  cloud_out->height = 1;
-                                  cloud_out->is_dense = false;
+//                                   pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_out(new pcl::PointCloud<pcl::PointXYZRGB>());
+//                                   cloud_out->points.assign(out.begin(), out.end());
+//                                   cloud_out->width = cloud_out->points.size();
+//                                   cloud_out->height = 1;
+//                                   cloud_out->is_dense = false;
 
-                                  pcl::io::savePLYFileBinary(filename, *cloud_out);
-                                  ROS_INFO("[save] %s: saved %zu corner points -> %s", cam_key.c_str(), out.size(), filename);
-                              }
-#endif
+//                                   pcl::io::savePLYFileBinary(filename, *cloud_out);
+//                                   ROS_INFO("[save] %s: saved %zu corner points -> %s", cam_key.c_str(), out.size(), filename);
+//                               }
+// #endif
 
                               corner_accum->points.insert(corner_accum->points.end(), out.begin(), out.end());
                           }
@@ -832,26 +852,26 @@ public:
                                   out.insert(out.end(), local.begin(), local.end());
                               }
 
-#if ENABLE_DEBUG_EACH_CAM_PCD_SAVE
-                              {
-                                  std::cout << cam_key << " : " << img_msg->header.stamp << ", " << std::endl;
-                                  std::string save_dir = "/dataset/test/vdbfusion/debug_surf";
-                                  fs::create_directories(save_dir);
+// #if ENABLE_DEBUG_EACH_CAM_PCD_SAVE
+//                               {
+//                                   std::cout << cam_key << " : " << img_msg->header.stamp << ", " << std::endl;
+//                                   std::string save_dir = "/dataset/test/vdbfusion/debug_surf";
+//                                   fs::create_directories(save_dir);
 
-                                  char filename[256];
-                                  snprintf(filename, sizeof(filename), "%s%s_%.6f.ply",
-                                           save_dir.c_str(), cam_key.c_str(), lidar_time);
+//                                   char filename[256];
+//                                   snprintf(filename, sizeof(filename), "%s%s_%.6f.ply",
+//                                            save_dir.c_str(), cam_key.c_str(), lidar_time);
 
-                                  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_out(new pcl::PointCloud<pcl::PointXYZRGB>());
-                                  cloud_out->points.assign(out.begin(), out.end());
-                                  cloud_out->width = cloud_out->points.size();
-                                  cloud_out->height = 1;
-                                  cloud_out->is_dense = false;
+//                                   pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_out(new pcl::PointCloud<pcl::PointXYZRGB>());
+//                                   cloud_out->points.assign(out.begin(), out.end());
+//                                   cloud_out->width = cloud_out->points.size();
+//                                   cloud_out->height = 1;
+//                                   cloud_out->is_dense = false;
 
-                                  pcl::io::savePLYFileBinary(filename, *cloud_out);
-                                  ROS_INFO("[save] %s: saved %zu surf points -> %s", cam_key.c_str(), out.size(), filename);
-                              }
-#endif
+//                                   pcl::io::savePLYFileBinary(filename, *cloud_out);
+//                                   ROS_INFO("[save] %s: saved %zu surf points -> %s", cam_key.c_str(), out.size(), filename);
+//                               }
+// #endif
 
                               surf_accum->points.insert(surf_accum->points.end(), out.begin(), out.end());
                           }
@@ -892,6 +912,10 @@ public:
                                           if (xi < 0 || yi < 0 || xi >= W || yi >= H)
                                               continue;
 
+                                          if (cam_key == "/camera_3/")
+                                              if (yi >= mask_y0 && xi >= mask_x0 && xi < mask_x1)
+                                                  continue;
+
                                           const cv::Vec3b c = image.at<cv::Vec3b>(yi, xi);
                                           pcl::PointXYZRGB q;
                                           q.x = p.x;
@@ -914,8 +938,8 @@ public:
                                       fs::create_directories(save_dir);
 
                                       char filename[256];
-                                      snprintf(filename, sizeof(filename), "%s%s_%.6f.ply",
-                                               save_dir.c_str(), cam_key.c_str(), lidar_time);
+                                      snprintf(filename, sizeof(filename), "%s%s%d.ply",
+                                               save_dir.c_str(), cam_key.c_str(), frameidx);
 
                                       pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_out(new pcl::PointCloud<pcl::PointXYZRGB>());
                                       cloud_out->points.assign(out.begin(), out.end());
@@ -924,7 +948,7 @@ public:
                                       cloud_out->is_dense = false;
 
                                       pcl::io::savePLYFileBinary(filename, *cloud_out);
-                                      ROS_INFO("[save] %s: saved %zu raw points -> %s", cam_key.c_str(), out.size(), filename);
+                                    //   ROS_INFO("[save] %s: saved %zu raw points -> %s", cam_key.c_str(), out.size(), filename);
                                   }
 #endif
 
@@ -933,6 +957,7 @@ public:
 
                           
                       });
+        frameidx++;
 
         if (corner_accum->points.empty() || surf_accum->points.empty())
             return;
@@ -983,7 +1008,7 @@ public:
             {
                 timeLastProcessing = timeLaserInfoCur;
 
-                std::cout<<"current narrow cloud "<<imgidx<<" check ... "<<laserCloudSurfLast->points.size()<<std::endl;
+                // std::cout<<"current narrow cloud "<<imgidx<<" check ... "<<laserCloudSurfLast->points.size()<<std::endl;
                 if(laserCloudSurfLast->points.size()<6000)
                 {
                     // imuRPYWeight=0.2;
@@ -1009,12 +1034,12 @@ public:
                 double x0 = transformTobeMapped[3];
                 double y0t = transformTobeMapped[4];
                 double z0 = transformTobeMapped[5];
-                ROS_INFO_STREAM("[DBG] before scan2map  rpy=(" << r0 << "," << p0 << "," << y0 << ") t=(" << x0 << "," << y0t << "," << z0 << ")");
+                // ROS_INFO_STREAM("[DBG] before scan2map  rpy=(" << r0 << "," << p0 << "," << y0 << ") t=(" << x0 << "," << y0t << "," << z0 << ")");
 
                 scan2MapOptimization();
 
-                ROS_INFO_STREAM("[DBG] after  scan2map  rpy=(" << transformTobeMapped[0] << "," << transformTobeMapped[1] << "," << transformTobeMapped[2] << ") t=("
-                                                               << transformTobeMapped[3] << "," << transformTobeMapped[4] << "," << transformTobeMapped[5] << ")");
+                // ROS_INFO_STREAM("[DBG] after  scan2map  rpy=(" << transformTobeMapped[0] << "," << transformTobeMapped[1] << "," << transformTobeMapped[2] << ") t=("
+                //                                                << transformTobeMapped[3] << "," << transformTobeMapped[4] << "," << transformTobeMapped[5] << ")");
 
                 saveKeyFramesAndFactor();
                 correctPoses();
@@ -2330,7 +2355,7 @@ public:
 
                 if (LMOptimization(iterCount))
                 {
-                    ROS_INFO_STREAM("[OPT] converged at iter="<<iterCount);
+                    // ROS_INFO_STREAM("[OPT] converged at iter="<<iterCount);
                     break;
                 }
             }
@@ -2352,8 +2377,8 @@ public:
             std::copy(transformTobeMapped + 3, transformTobeMapped+6, last_t);
             has_last = true;
 
-            ROS_WARN_STREAM("[POSE] step dR="<<std::setprecision(3)<<std::fixed<<dRdeg
-                            <<"deg dT="<<dT<<"m | M="<<laserCloudOri->size());
+            // ROS_WARN_STREAM("[POSE] step dR="<<std::setprecision(3)<<std::fixed<<dRdeg
+            //                 <<"deg dT="<<dT<<"m | M="<<laserCloudOri->size());
 
             transformUpdate();
         }

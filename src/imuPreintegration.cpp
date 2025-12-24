@@ -204,8 +204,6 @@ public:
 
     const double delta_t = 0;
 
-    int key = 1;
-
     // T_bl: tramsform points from lidar frame to imu frame 
     gtsam::Pose3 imu2Lidar = gtsam::Pose3(gtsam::Rot3(1, 0, 0, 0), gtsam::Point3(-extTrans.x(), -extTrans.y(), -extTrans.z()));
     // T_lb: tramsform points from imu frame to lidar frame
@@ -329,19 +327,19 @@ public:
             imuIntegratorImu_->resetIntegrationAndSetBias(prevBias_);
             imuIntegratorOpt_->resetIntegrationAndSetBias(prevBias_);
             
-            key = 1;
+            resetCnt = 1;
             systemInitialized = true;
             return;
         }
 
 
         // reset graph for speed
-        if (key == 100)
+        if (resetCnt == resetMax)
         {
             // get updated noise before reset
-            gtsam::noiseModel::Gaussian::shared_ptr updatedPoseNoise = gtsam::noiseModel::Gaussian::Covariance(optimizer.marginalCovariance(X(key-1)));
-            gtsam::noiseModel::Gaussian::shared_ptr updatedVelNoise  = gtsam::noiseModel::Gaussian::Covariance(optimizer.marginalCovariance(V(key-1)));
-            gtsam::noiseModel::Gaussian::shared_ptr updatedBiasNoise = gtsam::noiseModel::Gaussian::Covariance(optimizer.marginalCovariance(B(key-1)));
+            gtsam::noiseModel::Gaussian::shared_ptr updatedPoseNoise = gtsam::noiseModel::Gaussian::Covariance(optimizer.marginalCovariance(X(resetCnt-1)));
+            gtsam::noiseModel::Gaussian::shared_ptr updatedVelNoise  = gtsam::noiseModel::Gaussian::Covariance(optimizer.marginalCovariance(V(resetCnt-1)));
+            gtsam::noiseModel::Gaussian::shared_ptr updatedBiasNoise = gtsam::noiseModel::Gaussian::Covariance(optimizer.marginalCovariance(B(resetCnt-1)));
             // reset graph
             resetOptimization();
             // add pose
@@ -362,7 +360,7 @@ public:
             graphFactors.resize(0);
             graphValues.clear();
 
-            key = 1;
+            resetCnt = 1;
         }
 
         while (!imuQueOpt.empty())
@@ -401,20 +399,20 @@ public:
         }
         // add imu factor to graph
         const gtsam::PreintegratedImuMeasurements& preint_imu = dynamic_cast<const gtsam::PreintegratedImuMeasurements&>(*imuIntegratorOpt_);
-        gtsam::ImuFactor imu_factor(X(key - 1), V(key - 1), X(key), V(key), B(key - 1), preint_imu);
+        gtsam::ImuFactor imu_factor(X(resetCnt - 1), V(resetCnt - 1), X(resetCnt), V(resetCnt), B(resetCnt - 1), preint_imu);
         graphFactors.add(imu_factor);
         // add imu bias between factor
-        graphFactors.add(gtsam::BetweenFactor<gtsam::imuBias::ConstantBias>(B(key - 1), B(key), gtsam::imuBias::ConstantBias(),
+        graphFactors.add(gtsam::BetweenFactor<gtsam::imuBias::ConstantBias>(B(resetCnt - 1), B(resetCnt), gtsam::imuBias::ConstantBias(),
                          gtsam::noiseModel::Diagonal::Sigmas(sqrt(imuIntegratorOpt_->deltaTij()) * noiseModelBetweenBias)));
         // add pose factor
         gtsam::Pose3 curPose = lidarPose.compose(lidar2Imu);
-        gtsam::PriorFactor<gtsam::Pose3> pose_factor(X(key), curPose, degenerate ? correctionNoise2 : correctionNoise);
+        gtsam::PriorFactor<gtsam::Pose3> pose_factor(X(resetCnt), curPose, degenerate ? correctionNoise2 : correctionNoise);
         graphFactors.add(pose_factor);
         // insert predicted values
         gtsam::NavState propState_ = imuIntegratorOpt_->predict(prevState_, prevBias_);
-        graphValues.insert(X(key), propState_.pose());
-        graphValues.insert(V(key), propState_.v());
-        graphValues.insert(B(key), prevBias_);
+        graphValues.insert(X(resetCnt), propState_.pose());
+        graphValues.insert(V(resetCnt), propState_.v());
+        graphValues.insert(B(resetCnt), prevBias_);
         // optimize
         optimizer.update(graphFactors, graphValues);
         optimizer.update();
@@ -422,10 +420,10 @@ public:
         graphValues.clear();
         // Overwrite the beginning of the preintegration for the next step.
         gtsam::Values result = optimizer.calculateEstimate();
-        prevPose_  = result.at<gtsam::Pose3>(X(key));
-        prevVel_   = result.at<gtsam::Vector3>(V(key));
+        prevPose_  = result.at<gtsam::Pose3>(X(resetCnt));
+        prevVel_   = result.at<gtsam::Vector3>(V(resetCnt));
         prevState_ = gtsam::NavState(prevPose_, prevVel_);
-        prevBias_  = result.at<gtsam::imuBias::ConstantBias>(B(key));
+        prevBias_  = result.at<gtsam::imuBias::ConstantBias>(B(resetCnt));
         // Reset the optimization preintegration object.
         imuIntegratorOpt_->resetIntegrationAndSetBias(prevBias_);
         // check optimization
@@ -478,7 +476,7 @@ public:
             }
         }
 
-        ++key;
+        ++resetCnt;
         doneFirstOpt = true;
     }
 

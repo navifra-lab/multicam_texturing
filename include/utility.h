@@ -95,6 +95,8 @@ public:
     int N_SCAN;
     int Horizon_SCAN;
     int downsampleRate;
+    int resetMax;
+    int resetCnt;
     float lidarMinRange;
     float lidarMaxRange;
     float camtimeoffset;
@@ -219,6 +221,7 @@ public:
 
         nh.param<int>("lio_sam/N_SCAN", N_SCAN, 16);
         nh.param<int>("lio_sam/Horizon_SCAN", Horizon_SCAN, 1800);
+        nh.param<int>("lio_sam/resetMax", resetMax, 100);
         nh.param<int>("lio_sam/downsampleRate", downsampleRate, 1);
         nh.param<float>("lio_sam/lidarMinRange", lidarMinRange, 1.0);
         nh.param<float>("lio_sam/lidarMaxRange", lidarMaxRange, 1000.0);        
