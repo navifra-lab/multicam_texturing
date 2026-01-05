@@ -44,7 +44,7 @@ lio_sam:
     lidarMinRange: 0.5                         # default: 1.0, minimum lidar range to be used
     lidarMaxRange: 80.0                       # default: 1000.0, maximum lidar range to be used
 
-    camtimeoffset: 0.12
+    camtimeoffset: 0.0  #0.12
 
     # IMU Settings
     # imuAccNoise: 3.9939570888238808e-02
@@ -123,8 +123,9 @@ lio_sam:
     #Color Cloud
     # cameraTopics: ["/camera_3/","/camera_2/","/camera_1/","/camera_0/"]
     cameraTopics: ["/camera_3/","/camera_2/","/camera_1/"]
-    imageTopicLastName: "image_raw/compressed"
+    imageTopicLastName: "image_raw"
     cameraInfoTopicLastName: "camera_info"
+    isRaw: true
 
     # ------------------------------------------------------------------------------------------------------------------
 

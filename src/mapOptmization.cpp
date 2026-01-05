@@ -196,6 +196,276 @@ public:
 
     std::map<std::string, std::mutex> cam_mtx_;
 
+    void adjust_stamp(std_msgs::Header &h)
+    {
+        if (!h.stamp.isZero())
+        {
+            if (h.stamp.toSec() > camtimeoffset)
+                h.stamp -= ros::Duration(camtimeoffset);
+            else
+                h.stamp = ros::Time(0);
+        }
+    }
+
+    void process_with_image(
+    const std::string& cam_key,
+    const ros::Time& img_stamp,
+    const color_point_cloud::CameraTypePtr& cam,
+    const cv::Mat& image,
+    double lidar_time,
+    const lio_sam::cloud_infoConstPtr& msgIn,
+    std::map<std::string, ros::Time>& imageTimestamp,
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr& corner_accum,
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr& surf_accum,
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr& raw_accum)
+    {
+                          const int img_w = cam->get_image_width();
+                          const int img_h = cam->get_image_height();
+                          const int mask_h = static_cast<int>(img_h * 0.10);
+                          const int mask_w = static_cast<int>(img_w * 0.45);
+                          const int mask_x0 = (img_w - mask_w) / 2;
+                          const int mask_x1 = mask_x0 + mask_w;
+                          const int mask_y0 = img_h - mask_h;
+
+                          if (image.empty() || image.type() != CV_8UC3)
+                              return;
+
+                          const int W = cam->get_image_width();
+                          const int H = cam->get_image_height();
+                          const auto &P = cam->get_lidar_to_camera_projection_matrix();
+
+                          // ------- corner -------
+                          {
+                              color_point_cloud::PointCloudConst cloud_corner{msgIn->cloud_corner};
+                              std::vector<color_point_cloud::Point> pts;
+                              pts.reserve(cloud_corner.getPointCount());
+                              for (size_t i = 0; i < cloud_corner.getPointCount(); ++i)
+                              {
+                                  pts.emplace_back(cloud_corner.getCurrentPoint());
+                                  cloud_corner.nextPoint();
+                              }
+
+                              std::vector<pcl::PointXYZRGB> out;
+                              out.reserve(pts.size());
+
+#pragma omp parallel
+                              {
+                                  std::vector<pcl::PointXYZRGB> local;
+                                  local.reserve(Horizon_SCAN);
+
+#pragma omp for nowait
+                                  for (int i = 0; i < static_cast<int>(pts.size()); ++i)
+                                  {
+                                      const auto &p = pts[i];
+                                    //   double dist = std::sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
+                                    //   if (dist > 40.0)
+                                        //   continue;
+                                      Eigen::Vector4d p4(p.x, p.y, p.z, 1.0);
+                                      Eigen::Vector3d pc = P * p4;
+                                      const double z = pc[2];
+                                      if (z <= 1e-6)
+                                          continue;
+
+                                      const int xi = static_cast<int>(std::round(pc[0] / z));
+                                      const int yi = static_cast<int>(std::round(pc[1] / z));
+                                      if (xi < 0 || yi < 0 || xi >= W || yi >= H)
+                                          continue;
+
+                                      const cv::Vec3b c = image.at<cv::Vec3b>(yi, xi);
+                                      pcl::PointXYZRGB q;
+                                      q.x = p.x;
+                                      q.y = p.y;
+                                      q.z = p.z;
+                                      q.r = c[2];
+                                      q.g = c[1];
+                                      q.b = c[0];
+                                      local.push_back(q);
+                                  }
+
+#pragma omp critical
+                                  out.insert(out.end(), local.begin(), local.end());
+                              }
+
+// #if ENABLE_DEBUG_EACH_CAM_PCD_SAVE
+//                               {
+//                                   std::cout << cam_key << " : " << img_msg->header.stamp << ", " << std::endl;
+//                                   std::string save_dir = "/dataset/test/vdbfusion/debug_corner";
+//                                   fs::create_directories(save_dir);
+
+//                                   char filename[256];
+//                                   snprintf(filename, sizeof(filename), "%s%s_%.6f.ply",
+//                                            save_dir.c_str(), cam_key.c_str(), lidar_time);
+
+//                                   pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_out(new pcl::PointCloud<pcl::PointXYZRGB>());
+//                                   cloud_out->points.assign(out.begin(), out.end());
+//                                   cloud_out->width = cloud_out->points.size();
+//                                   cloud_out->height = 1;
+//                                   cloud_out->is_dense = false;
+
+//                                   pcl::io::savePLYFileBinary(filename, *cloud_out);
+//                                   ROS_INFO("[save] %s: saved %zu corner points -> %s", cam_key.c_str(), out.size(), filename);
+//                               }
+// #endif
+
+                              corner_accum->points.insert(corner_accum->points.end(), out.begin(), out.end());
+                          }
+
+                          // ------- surf -------
+                          {
+                              color_point_cloud::PointCloudConst cloud_surface{msgIn->cloud_surface};
+                              std::vector<color_point_cloud::Point> pts;
+                              pts.reserve(cloud_surface.getPointCount());
+                              for (size_t i = 0; i < cloud_surface.getPointCount(); ++i)
+                              {
+                                  pts.emplace_back(cloud_surface.getCurrentPoint());
+                                  cloud_surface.nextPoint();
+                              }
+
+                              std::vector<pcl::PointXYZRGB> out;
+                              out.reserve(pts.size());
+
+#pragma omp parallel
+                              {
+                                  std::vector<pcl::PointXYZRGB> local;
+                                  local.reserve(Horizon_SCAN);
+
+#pragma omp for nowait
+                                  for (int i = 0; i < static_cast<int>(pts.size()); ++i)
+                                  {
+                                      const auto &p = pts[i];
+                                    //   double dist = std::sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
+                                    //   if (dist > 40.0)
+                                    //       continue;
+                                      Eigen::Vector4d p4(p.x, p.y, p.z, 1.0);
+                                      Eigen::Vector3d pc = P * p4;
+                                      const double z = pc[2];
+                                      if (z <= 1e-6)
+                                          continue;
+
+                                      const int xi = static_cast<int>(std::round(pc[0] / z));
+                                      const int yi = static_cast<int>(std::round(pc[1] / z));
+                                      if (xi < 0 || yi < 0 || xi >= W || yi >= H)
+                                          continue;
+
+                                      const cv::Vec3b c = image.at<cv::Vec3b>(yi, xi);
+                                      pcl::PointXYZRGB q;
+                                      q.x = p.x;
+                                      q.y = p.y;
+                                      q.z = p.z;
+                                      q.r = c[2];
+                                      q.g = c[1];
+                                      q.b = c[0];
+                                      local.push_back(q);
+                                  }
+
+#pragma omp critical
+                                  out.insert(out.end(), local.begin(), local.end());
+                              }
+
+// #if ENABLE_DEBUG_EACH_CAM_PCD_SAVE
+//                               {
+//                                   std::cout << cam_key << " : " << img_msg->header.stamp << ", " << std::endl;
+//                                   std::string save_dir = "/dataset/test/vdbfusion/debug_surf";
+//                                   fs::create_directories(save_dir);
+
+//                                   char filename[256];
+//                                   snprintf(filename, sizeof(filename), "%s%s_%.6f.ply",
+//                                            save_dir.c_str(), cam_key.c_str(), lidar_time);
+
+//                                   pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_out(new pcl::PointCloud<pcl::PointXYZRGB>());
+//                                   cloud_out->points.assign(out.begin(), out.end());
+//                                   cloud_out->width = cloud_out->points.size();
+//                                   cloud_out->height = 1;
+//                                   cloud_out->is_dense = false;
+
+//                                   pcl::io::savePLYFileBinary(filename, *cloud_out);
+//                                   ROS_INFO("[save] %s: saved %zu surf points -> %s", cam_key.c_str(), out.size(), filename);
+//                               }
+// #endif
+
+                              surf_accum->points.insert(surf_accum->points.end(), out.begin(), out.end());
+                          }
+
+                          // ------- raw -------
+                          {
+                              color_point_cloud::PointCloudConst cloud_good{msgIn->cloud_good};
+                              std::vector<color_point_cloud::Point> pts;
+                              pts.reserve(cloud_good.getPointCount());
+                              for (size_t i = 0; i < cloud_good.getPointCount(); ++i)
+                              {
+                                  pts.emplace_back(cloud_good.getCurrentPoint());
+                                  cloud_good.nextPoint();
+                              }
+
+                              std::vector<pcl::PointXYZRGB> out;
+                              out.reserve(pts.size());
+#pragma omp parallel
+                                  {
+                                      std::vector<pcl::PointXYZRGB> local;
+                                      local.reserve(Horizon_SCAN);
+
+#pragma omp for nowait
+                                      for (int i = 0; i < static_cast<int>(pts.size()); ++i)
+                                      {
+                                          const auto &p = pts[i];
+                                        //   double dist = std::sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
+                                        //   if (dist > 40.0)
+                                        //       continue;
+                                          Eigen::Vector4d p4(p.x, p.y, p.z, 1.0);
+                                          Eigen::Vector3d pc = P * p4;
+                                          const double z = pc[2];
+                                          if (z <= 1e-6)
+                                              continue;
+
+                                          const int xi = static_cast<int>(std::round(pc[0] / z));
+                                          const int yi = static_cast<int>(std::round(pc[1] / z));
+                                          if (xi < 0 || yi < 0 || xi >= W || yi >= H)
+                                              continue;
+
+                                          if (cam_key == "/camera_3/")
+                                              if (yi >= mask_y0 && xi >= mask_x0 && xi < mask_x1)
+                                                  continue;
+
+                                          const cv::Vec3b c = image.at<cv::Vec3b>(yi, xi);
+                                          pcl::PointXYZRGB q;
+                                          q.x = p.x;
+                                          q.y = p.y;
+                                          q.z = p.z;
+                                          q.r = c[2];
+                                          q.g = c[1];
+                                          q.b = c[0];
+                                          local.push_back(q);
+                                      }
+
+#pragma omp critical
+                                      out.insert(out.end(), local.begin(), local.end());
+                                  }
+
+#if ENABLE_DEBUG_EACH_CAM_PCD_SAVE
+                                  {
+                                    //   std::cout << cam_key << " : " << img_msg->header.stamp << ", " << std::endl;
+                                      std::string save_dir = "/dataset/test/vdbfusion/debug";
+                                      fs::create_directories(save_dir);
+
+                                      char filename[256];
+                                      snprintf(filename, sizeof(filename), "%s%s%d.ply",
+                                               save_dir.c_str(), cam_key.c_str(), frameidx);
+
+                                      pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_out(new pcl::PointCloud<pcl::PointXYZRGB>());
+                                      cloud_out->points.assign(out.begin(), out.end());
+                                      cloud_out->width = cloud_out->points.size();
+                                      cloud_out->height = 1;
+                                      cloud_out->is_dense = false;
+
+                                      pcl::io::savePLYFileBinary(filename, *cloud_out);
+                                    //   ROS_INFO("[save] %s: saved %zu raw points -> %s", cam_key.c_str(), out.size(), filename);
+                                  }
+#endif
+
+                              raw_accum->points.insert(raw_accum->points.end(), out.begin(), out.end());
+                          }
+    }
+
     size_t nearestIndexInBuffer(const std::string &cam_key, double lidar_time)
     {
         auto cam = camera_type_stdmap_[cam_key];
@@ -246,8 +516,57 @@ public:
         return best_idx;
     }
 
-    sensor_msgs::CompressedImageConstPtr getImageForLidar(
-        const std::string &cam_key, double lidar_time)
+    size_t nearestIndexInRawBuffer(const std::string &cam_key, double lidar_time)
+    {
+        auto cam = camera_type_stdmap_[cam_key];
+        if (!cam)
+            return (size_t)-1;
+        size_t n = cam->raw_buf_size();
+        if (n == 0)
+            return (size_t)-1;
+
+        size_t lo = 0, hi = n;
+        while (lo < hi)
+        {
+            size_t mid = (lo + hi) / 2;
+            auto img = cam->raw_buf_at(mid);
+            if (!img)
+                break;
+            double t = img->header.stamp.toSec();
+            if (t < lidar_time)
+                lo = mid + 1;
+            else
+                hi = mid;
+        }
+
+        size_t cand0 = (lo > 0) ? (lo - 1) : (size_t)-1;
+        size_t cand1 = (lo < n) ? lo : (size_t)-1;
+
+        size_t best_idx = (size_t)-1;
+        double best_diff = std::numeric_limits<double>::infinity();
+
+        auto consider = [&](size_t idx)
+        {
+            if (idx == (size_t)-1 || idx >= n)
+                return;
+            auto img = cam->raw_buf_at(idx);
+            if (!img)
+                return;
+            double diff = std::fabs(img->header.stamp.toSec() - lidar_time);
+            if (diff < best_diff)
+            {
+                best_diff = diff;
+                best_idx = idx;
+            }
+        };
+
+        consider(cand0);
+        consider(cand1);
+
+        return best_idx;
+    }
+
+    sensor_msgs::CompressedImageConstPtr getImageForLidar(const std::string &cam_key, double lidar_time)
     {
         std::lock_guard<std::mutex> lk(cam_mtx_[cam_key]);
 
@@ -270,6 +589,47 @@ public:
         if (idx + 1 < cam->buf_size())
         {
             auto img3 = cam->buf_at(idx + 1);
+            double dt3 = img3->header.stamp.toSec() - lidar_time;
+            std::cout << std::fixed << std::setprecision(5) << "next " << cam_key << " : " << img3->header.stamp.toSec() << ", lidar : " << lidar_time << ", cam-lidar : " << dt3 << std::endl;
+        }
+
+        return img;
+    }
+
+    sensor_msgs::ImageConstPtr getRawImageForLidar(const std::string &cam_key, double lidar_time)
+    {
+        std::lock_guard<std::mutex> lk(cam_mtx_[cam_key]);
+
+        size_t idx = -1;
+        if(isRaw)
+        {
+            idx = nearestIndexInRawBuffer(cam_key, lidar_time);
+        }
+        else
+        {
+            idx = nearestIndexInBuffer(cam_key, lidar_time);
+        }
+        if (idx == (size_t)-1)
+        {
+            std::cout<<"no index found "<<idx<<std::endl;
+            return nullptr;
+        }
+
+        auto cam = camera_type_stdmap_[cam_key];
+        auto img = cam->raw_buf_at(idx);
+
+        double dt = img->header.stamp.toSec() - lidar_time;
+        std::cout << std::fixed << std::setprecision(5) << "cur " << cam_key << " : " << img->header.stamp.toSec() << ", lidar : " << lidar_time << ", cam-lidar : " << dt << std::endl;
+        if (idx > 0)
+        {
+            auto img2 = cam->raw_buf_at(idx - 1);
+            double dt2 = img2->header.stamp.toSec() - lidar_time;
+            std::cout << std::fixed << std::setprecision(5) << "prev " << cam_key << " : " << img2->header.stamp.toSec() << ", lidar : " << lidar_time << ", cam-lidar : " << dt2 << std::endl;
+        }
+
+        if (idx + 1 < cam->raw_buf_size())
+        {
+            auto img3 = cam->raw_buf_at(idx + 1);
             double dt3 = img3->header.stamp.toSec() - lidar_time;
             std::cout << std::fixed << std::setprecision(5) << "next " << cam_key << " : " << img3->header.stamp.toSec() << ", lidar : " << lidar_time << ", cam-lidar : " << dt3 << std::endl;
         }
@@ -323,26 +683,70 @@ public:
                 std::make_shared<color_point_cloud::CameraType>(image_topic, camera_info_topic);
             camera_type_stdmap_[camera_topic] = camera_type_ptr;
 
-            image_subscribers_.push_back(
-                nh.subscribe<sensor_msgs::CompressedImage>(
-                    image_topic, 100,
-                    [this, camera_topic](const sensor_msgs::CompressedImageConstPtr &msg)
-                    {
-                        sensor_msgs::CompressedImagePtr adj(new sensor_msgs::CompressedImage(*msg));
-                        const ros::Time ts = adj->header.stamp;
-                        if (!ts.isZero())
+            if (!isRaw)
+            {
+                // ===== CompressedImage =====
+                image_subscribers_.push_back(
+                    nh.subscribe<sensor_msgs::CompressedImage>(
+                        image_topic, 100,
+                        [this, camera_topic](const sensor_msgs::CompressedImageConstPtr &msg)
                         {
-                            if (ts.toSec() > camtimeoffset)
-                                adj->header.stamp = ts - ros::Duration(camtimeoffset);
-                            else
-                                adj->header.stamp = ros::Time(0);
-                        }
+                            auto adj = boost::make_shared<sensor_msgs::CompressedImage>(*msg);
 
-                        std::lock_guard<std::mutex> lk(cam_mtx_[camera_topic]);
-                        auto it = camera_type_stdmap_.find(camera_topic);
-                        if (it != camera_type_stdmap_.end())
-                            it->second->push_keep_all(adj);
-                    }));
+                            const ros::Time ts = adj->header.stamp;
+                            
+                            adjust_stamp(adj->header);
+
+                            std::lock_guard<std::mutex> lk(cam_mtx_[camera_topic]);
+                            auto it = camera_type_stdmap_.find(camera_topic);
+                            if (it != camera_type_stdmap_.end())
+                                it->second->push_keep_all(adj);
+                        }));
+            }
+            else
+            {
+                // ===== Raw Image =====
+                image_subscribers_.push_back(
+                    nh.subscribe<sensor_msgs::Image>(
+                        image_topic, 100,
+                        [this, camera_topic](const sensor_msgs::ImageConstPtr &msg)
+                        {
+                            auto adj = boost::make_shared<sensor_msgs::Image>(*msg);
+
+                            const ros::Time ts = adj->header.stamp;
+                            
+                            adjust_stamp(adj->header);
+
+                            std::lock_guard<std::mutex> lk(cam_mtx_[camera_topic]);
+                            auto it = camera_type_stdmap_.find(camera_topic);
+                            if (it != camera_type_stdmap_.end())
+                            {
+                                it->second->raw_push_keep_all(adj);
+                            }
+
+                        }));
+            }
+
+            // image_subscribers_.push_back(
+            //     nh.subscribe<sensor_msgs::CompressedImage>(
+            //         image_topic, 100,
+            //         [this, camera_topic](const sensor_msgs::CompressedImageConstPtr &msg)
+            //         {
+            //             sensor_msgs::CompressedImagePtr adj(new sensor_msgs::CompressedImage(*msg));
+            //             const ros::Time ts = adj->header.stamp;
+            //             if (!ts.isZero())
+            //             {
+            //                 if (ts.toSec() > camtimeoffset)
+            //                     adj->header.stamp = ts - ros::Duration(camtimeoffset);
+            //                 else
+            //                     adj->header.stamp = ros::Time(0);
+            //             }
+
+            //             std::lock_guard<std::mutex> lk(cam_mtx_[camera_topic]);
+            //             auto it = camera_type_stdmap_.find(camera_topic);
+            //             if (it != camera_type_stdmap_.end())
+            //                 it->second->push_keep_all(adj);
+            //         }));
 
             sensor_msgs::CameraInfoPtr cam_info(new sensor_msgs::CameraInfo);
 
@@ -698,265 +1102,313 @@ public:
                           if (!cam->get_camera_info() || !cam->is_info_initialized() || !cam->is_transform_initialized())
                               return;
 
-                          auto img_msg = getImageForLidar(cam_key, lidar_time);
-                          if (!img_msg)
+                          if(isRaw)
                           {
-                              ROS_DEBUG_THROTTLE(1.0, "[%s] no image yet around %.3f", cam_key.c_str(), lidar_time);
-                              return; 
+                              auto img_msg = getRawImageForLidar(cam_key, lidar_time);
+                              if (!img_msg)
+                              {
+                                  std::cout<<std::fixed << std::setprecision(10)<<"no image yet around "<<cam_key.c_str()<<", "<<lidar_time<<std::endl;
+                                  return;
+                              }
+
+                              cam->set_cv_image(img_msg);
+                              const cv::Mat &image = cam->get_cv_image();
+                              imageTimestamp[cam_key] = img_msg->header.stamp;
+
+                              process_with_image(
+                                  cam_key,
+                                  img_msg->header.stamp,
+                                  cam,
+                                  image,
+                                  lidar_time,
+                                  msgIn,
+                                  imageTimestamp,
+                                  corner_accum,
+                                  surf_accum,
+                                  raw_accum);
+                          }
+                          else
+                          {
+                              auto img_msg = getImageForLidar(cam_key, lidar_time);
+                              if (!img_msg)
+                              {
+                                  std::cout<<std::fixed << std::setprecision(10)<<"no image yet around "<<cam_key.c_str()<<", "<<lidar_time<<std::endl;
+                                  return;
+                              }
+
+                              cam->set_cv_image_from_compressed(img_msg);
+                              const cv::Mat &image = cam->get_cv_image();
+                              imageTimestamp[cam_key] = img_msg->header.stamp;
+
+                              process_with_image(
+                                  cam_key,
+                                  img_msg->header.stamp,
+                                  cam,
+                                  image,
+                                  lidar_time,
+                                  msgIn,
+                                  imageTimestamp,
+                                  corner_accum,
+                                  surf_accum,
+                                  raw_accum);
                           }
 
-                          imageTimestamp[cam_key] = img_msg->header.stamp;
 
-                          cam->set_cv_image_from_compressed(img_msg);
-                          const cv::Mat &image = cam->get_cv_image();
-                          const int img_w = image.cols;
-                          const int img_h = image.rows;
-                          const int mask_h = static_cast<int>(img_h * 0.10);
-                          const int mask_w = static_cast<int>(img_w * 0.45);
-                          const int mask_x0 = (img_w - mask_w) / 2;
-                          const int mask_x1 = mask_x0 + mask_w;
-                          const int mask_y0 = img_h - mask_h;
 
-                          if (image.empty() || image.type() != CV_8UC3)
-                              return;
 
-                          const int W = cam->get_image_width();
-                          const int H = cam->get_image_height();
-                          const auto &P = cam->get_lidar_to_camera_projection_matrix();
+//                           imageTimestamp[cam_key] = img_msg->header.stamp;
 
-                          // ------- corner -------
-                          {
-                              color_point_cloud::PointCloudConst cloud_corner{msgIn->cloud_corner};
-                              std::vector<color_point_cloud::Point> pts;
-                              pts.reserve(cloud_corner.getPointCount());
-                              for (size_t i = 0; i < cloud_corner.getPointCount(); ++i)
-                              {
-                                  pts.emplace_back(cloud_corner.getCurrentPoint());
-                                  cloud_corner.nextPoint();
-                              }
+//                           cam->set_cv_image_from_compressed(img_msg);
+//                           const cv::Mat &image = cam->get_cv_image();
+//                           const int img_w = image.cols;
+//                           const int img_h = image.rows;
+//                           const int mask_h = static_cast<int>(img_h * 0.10);
+//                           const int mask_w = static_cast<int>(img_w * 0.45);
+//                           const int mask_x0 = (img_w - mask_w) / 2;
+//                           const int mask_x1 = mask_x0 + mask_w;
+//                           const int mask_y0 = img_h - mask_h;
 
-                              std::vector<pcl::PointXYZRGB> out;
-                              out.reserve(pts.size());
+//                           if (image.empty() || image.type() != CV_8UC3)
+//                               return;
 
-#pragma omp parallel
-                              {
-                                  std::vector<pcl::PointXYZRGB> local;
-                                  local.reserve(Horizon_SCAN);
+//                           const int W = cam->get_image_width();
+//                           const int H = cam->get_image_height();
+//                           const auto &P = cam->get_lidar_to_camera_projection_matrix();
 
-#pragma omp for nowait
-                                  for (int i = 0; i < static_cast<int>(pts.size()); ++i)
-                                  {
-                                      const auto &p = pts[i];
-                                    //   double dist = std::sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
-                                    //   if (dist > 40.0)
-                                        //   continue;
-                                      Eigen::Vector4d p4(p.x, p.y, p.z, 1.0);
-                                      Eigen::Vector3d pc = P * p4;
-                                      const double z = pc[2];
-                                      if (z <= 1e-6)
-                                          continue;
+//                           // ------- corner -------
+//                           {
+//                               color_point_cloud::PointCloudConst cloud_corner{msgIn->cloud_corner};
+//                               std::vector<color_point_cloud::Point> pts;
+//                               pts.reserve(cloud_corner.getPointCount());
+//                               for (size_t i = 0; i < cloud_corner.getPointCount(); ++i)
+//                               {
+//                                   pts.emplace_back(cloud_corner.getCurrentPoint());
+//                                   cloud_corner.nextPoint();
+//                               }
 
-                                      const int xi = static_cast<int>(std::round(pc[0] / z));
-                                      const int yi = static_cast<int>(std::round(pc[1] / z));
-                                      if (xi < 0 || yi < 0 || xi >= W || yi >= H)
-                                          continue;
+//                               std::vector<pcl::PointXYZRGB> out;
+//                               out.reserve(pts.size());
 
-                                      const cv::Vec3b c = image.at<cv::Vec3b>(yi, xi);
-                                      pcl::PointXYZRGB q;
-                                      q.x = p.x;
-                                      q.y = p.y;
-                                      q.z = p.z;
-                                      q.r = c[2];
-                                      q.g = c[1];
-                                      q.b = c[0];
-                                      local.push_back(q);
-                                  }
+// #pragma omp parallel
+//                               {
+//                                   std::vector<pcl::PointXYZRGB> local;
+//                                   local.reserve(Horizon_SCAN);
 
-#pragma omp critical
-                                  out.insert(out.end(), local.begin(), local.end());
-                              }
+// #pragma omp for nowait
+//                                   for (int i = 0; i < static_cast<int>(pts.size()); ++i)
+//                                   {
+//                                       const auto &p = pts[i];
+//                                     //   double dist = std::sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
+//                                     //   if (dist > 40.0)
+//                                         //   continue;
+//                                       Eigen::Vector4d p4(p.x, p.y, p.z, 1.0);
+//                                       Eigen::Vector3d pc = P * p4;
+//                                       const double z = pc[2];
+//                                       if (z <= 1e-6)
+//                                           continue;
+
+//                                       const int xi = static_cast<int>(std::round(pc[0] / z));
+//                                       const int yi = static_cast<int>(std::round(pc[1] / z));
+//                                       if (xi < 0 || yi < 0 || xi >= W || yi >= H)
+//                                           continue;
+
+//                                       const cv::Vec3b c = image.at<cv::Vec3b>(yi, xi);
+//                                       pcl::PointXYZRGB q;
+//                                       q.x = p.x;
+//                                       q.y = p.y;
+//                                       q.z = p.z;
+//                                       q.r = c[2];
+//                                       q.g = c[1];
+//                                       q.b = c[0];
+//                                       local.push_back(q);
+//                                   }
+
+// #pragma omp critical
+//                                   out.insert(out.end(), local.begin(), local.end());
+//                               }
+
+// // #if ENABLE_DEBUG_EACH_CAM_PCD_SAVE
+// //                               {
+// //                                   std::cout << cam_key << " : " << img_msg->header.stamp << ", " << std::endl;
+// //                                   std::string save_dir = "/dataset/test/vdbfusion/debug_corner";
+// //                                   fs::create_directories(save_dir);
+
+// //                                   char filename[256];
+// //                                   snprintf(filename, sizeof(filename), "%s%s_%.6f.ply",
+// //                                            save_dir.c_str(), cam_key.c_str(), lidar_time);
+
+// //                                   pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_out(new pcl::PointCloud<pcl::PointXYZRGB>());
+// //                                   cloud_out->points.assign(out.begin(), out.end());
+// //                                   cloud_out->width = cloud_out->points.size();
+// //                                   cloud_out->height = 1;
+// //                                   cloud_out->is_dense = false;
+
+// //                                   pcl::io::savePLYFileBinary(filename, *cloud_out);
+// //                                   ROS_INFO("[save] %s: saved %zu corner points -> %s", cam_key.c_str(), out.size(), filename);
+// //                               }
+// // #endif
+
+//                               corner_accum->points.insert(corner_accum->points.end(), out.begin(), out.end());
+//                           }
+
+//                           // ------- surf -------
+//                           {
+//                               color_point_cloud::PointCloudConst cloud_surface{msgIn->cloud_surface};
+//                               std::vector<color_point_cloud::Point> pts;
+//                               pts.reserve(cloud_surface.getPointCount());
+//                               for (size_t i = 0; i < cloud_surface.getPointCount(); ++i)
+//                               {
+//                                   pts.emplace_back(cloud_surface.getCurrentPoint());
+//                                   cloud_surface.nextPoint();
+//                               }
+
+//                               std::vector<pcl::PointXYZRGB> out;
+//                               out.reserve(pts.size());
+
+// #pragma omp parallel
+//                               {
+//                                   std::vector<pcl::PointXYZRGB> local;
+//                                   local.reserve(Horizon_SCAN);
+
+// #pragma omp for nowait
+//                                   for (int i = 0; i < static_cast<int>(pts.size()); ++i)
+//                                   {
+//                                       const auto &p = pts[i];
+//                                     //   double dist = std::sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
+//                                     //   if (dist > 40.0)
+//                                     //       continue;
+//                                       Eigen::Vector4d p4(p.x, p.y, p.z, 1.0);
+//                                       Eigen::Vector3d pc = P * p4;
+//                                       const double z = pc[2];
+//                                       if (z <= 1e-6)
+//                                           continue;
+
+//                                       const int xi = static_cast<int>(std::round(pc[0] / z));
+//                                       const int yi = static_cast<int>(std::round(pc[1] / z));
+//                                       if (xi < 0 || yi < 0 || xi >= W || yi >= H)
+//                                           continue;
+
+//                                       const cv::Vec3b c = image.at<cv::Vec3b>(yi, xi);
+//                                       pcl::PointXYZRGB q;
+//                                       q.x = p.x;
+//                                       q.y = p.y;
+//                                       q.z = p.z;
+//                                       q.r = c[2];
+//                                       q.g = c[1];
+//                                       q.b = c[0];
+//                                       local.push_back(q);
+//                                   }
+
+// #pragma omp critical
+//                                   out.insert(out.end(), local.begin(), local.end());
+//                               }
+
+// // #if ENABLE_DEBUG_EACH_CAM_PCD_SAVE
+// //                               {
+// //                                   std::cout << cam_key << " : " << img_msg->header.stamp << ", " << std::endl;
+// //                                   std::string save_dir = "/dataset/test/vdbfusion/debug_surf";
+// //                                   fs::create_directories(save_dir);
+
+// //                                   char filename[256];
+// //                                   snprintf(filename, sizeof(filename), "%s%s_%.6f.ply",
+// //                                            save_dir.c_str(), cam_key.c_str(), lidar_time);
+
+// //                                   pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_out(new pcl::PointCloud<pcl::PointXYZRGB>());
+// //                                   cloud_out->points.assign(out.begin(), out.end());
+// //                                   cloud_out->width = cloud_out->points.size();
+// //                                   cloud_out->height = 1;
+// //                                   cloud_out->is_dense = false;
+
+// //                                   pcl::io::savePLYFileBinary(filename, *cloud_out);
+// //                                   ROS_INFO("[save] %s: saved %zu surf points -> %s", cam_key.c_str(), out.size(), filename);
+// //                               }
+// // #endif
+
+//                               surf_accum->points.insert(surf_accum->points.end(), out.begin(), out.end());
+//                           }
+
+//                           // ------- raw -------
+//                           {
+//                               color_point_cloud::PointCloudConst cloud_good{msgIn->cloud_good};
+//                               std::vector<color_point_cloud::Point> pts;
+//                               pts.reserve(cloud_good.getPointCount());
+//                               for (size_t i = 0; i < cloud_good.getPointCount(); ++i)
+//                               {
+//                                   pts.emplace_back(cloud_good.getCurrentPoint());
+//                                   cloud_good.nextPoint();
+//                               }
+
+//                               std::vector<pcl::PointXYZRGB> out;
+//                               out.reserve(pts.size());
+// #pragma omp parallel
+//                                   {
+//                                       std::vector<pcl::PointXYZRGB> local;
+//                                       local.reserve(Horizon_SCAN);
+
+// #pragma omp for nowait
+//                                       for (int i = 0; i < static_cast<int>(pts.size()); ++i)
+//                                       {
+//                                           const auto &p = pts[i];
+//                                         //   double dist = std::sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
+//                                         //   if (dist > 40.0)
+//                                         //       continue;
+//                                           Eigen::Vector4d p4(p.x, p.y, p.z, 1.0);
+//                                           Eigen::Vector3d pc = P * p4;
+//                                           const double z = pc[2];
+//                                           if (z <= 1e-6)
+//                                               continue;
+
+//                                           const int xi = static_cast<int>(std::round(pc[0] / z));
+//                                           const int yi = static_cast<int>(std::round(pc[1] / z));
+//                                           if (xi < 0 || yi < 0 || xi >= W || yi >= H)
+//                                               continue;
+
+//                                           if (cam_key == "/camera_3/")
+//                                               if (yi >= mask_y0 && xi >= mask_x0 && xi < mask_x1)
+//                                                   continue;
+
+//                                           const cv::Vec3b c = image.at<cv::Vec3b>(yi, xi);
+//                                           pcl::PointXYZRGB q;
+//                                           q.x = p.x;
+//                                           q.y = p.y;
+//                                           q.z = p.z;
+//                                           q.r = c[2];
+//                                           q.g = c[1];
+//                                           q.b = c[0];
+//                                           local.push_back(q);
+//                                       }
+
+// #pragma omp critical
+//                                       out.insert(out.end(), local.begin(), local.end());
+//                                   }
 
 // #if ENABLE_DEBUG_EACH_CAM_PCD_SAVE
-//                               {
-//                                   std::cout << cam_key << " : " << img_msg->header.stamp << ", " << std::endl;
-//                                   std::string save_dir = "/dataset/test/vdbfusion/debug_corner";
-//                                   fs::create_directories(save_dir);
+//                                   {
+//                                       std::cout << cam_key << " : " << img_msg->header.stamp << ", " << std::endl;
+//                                       std::string save_dir = "/dataset/test/vdbfusion/debug";
+//                                       fs::create_directories(save_dir);
 
-//                                   char filename[256];
-//                                   snprintf(filename, sizeof(filename), "%s%s_%.6f.ply",
-//                                            save_dir.c_str(), cam_key.c_str(), lidar_time);
+//                                       char filename[256];
+//                                       snprintf(filename, sizeof(filename), "%s%s%d.ply",
+//                                                save_dir.c_str(), cam_key.c_str(), frameidx);
 
-//                                   pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_out(new pcl::PointCloud<pcl::PointXYZRGB>());
-//                                   cloud_out->points.assign(out.begin(), out.end());
-//                                   cloud_out->width = cloud_out->points.size();
-//                                   cloud_out->height = 1;
-//                                   cloud_out->is_dense = false;
+//                                       pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_out(new pcl::PointCloud<pcl::PointXYZRGB>());
+//                                       cloud_out->points.assign(out.begin(), out.end());
+//                                       cloud_out->width = cloud_out->points.size();
+//                                       cloud_out->height = 1;
+//                                       cloud_out->is_dense = false;
 
-//                                   pcl::io::savePLYFileBinary(filename, *cloud_out);
-//                                   ROS_INFO("[save] %s: saved %zu corner points -> %s", cam_key.c_str(), out.size(), filename);
-//                               }
+//                                       pcl::io::savePLYFileBinary(filename, *cloud_out);
+//                                     //   ROS_INFO("[save] %s: saved %zu raw points -> %s", cam_key.c_str(), out.size(), filename);
+//                                   }
 // #endif
 
-                              corner_accum->points.insert(corner_accum->points.end(), out.begin(), out.end());
-                          }
-
-                          // ------- surf -------
-                          {
-                              color_point_cloud::PointCloudConst cloud_surface{msgIn->cloud_surface};
-                              std::vector<color_point_cloud::Point> pts;
-                              pts.reserve(cloud_surface.getPointCount());
-                              for (size_t i = 0; i < cloud_surface.getPointCount(); ++i)
-                              {
-                                  pts.emplace_back(cloud_surface.getCurrentPoint());
-                                  cloud_surface.nextPoint();
-                              }
-
-                              std::vector<pcl::PointXYZRGB> out;
-                              out.reserve(pts.size());
-
-#pragma omp parallel
-                              {
-                                  std::vector<pcl::PointXYZRGB> local;
-                                  local.reserve(Horizon_SCAN);
-
-#pragma omp for nowait
-                                  for (int i = 0; i < static_cast<int>(pts.size()); ++i)
-                                  {
-                                      const auto &p = pts[i];
-                                    //   double dist = std::sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
-                                    //   if (dist > 40.0)
-                                    //       continue;
-                                      Eigen::Vector4d p4(p.x, p.y, p.z, 1.0);
-                                      Eigen::Vector3d pc = P * p4;
-                                      const double z = pc[2];
-                                      if (z <= 1e-6)
-                                          continue;
-
-                                      const int xi = static_cast<int>(std::round(pc[0] / z));
-                                      const int yi = static_cast<int>(std::round(pc[1] / z));
-                                      if (xi < 0 || yi < 0 || xi >= W || yi >= H)
-                                          continue;
-
-                                      const cv::Vec3b c = image.at<cv::Vec3b>(yi, xi);
-                                      pcl::PointXYZRGB q;
-                                      q.x = p.x;
-                                      q.y = p.y;
-                                      q.z = p.z;
-                                      q.r = c[2];
-                                      q.g = c[1];
-                                      q.b = c[0];
-                                      local.push_back(q);
-                                  }
-
-#pragma omp critical
-                                  out.insert(out.end(), local.begin(), local.end());
-                              }
-
-// #if ENABLE_DEBUG_EACH_CAM_PCD_SAVE
-//                               {
-//                                   std::cout << cam_key << " : " << img_msg->header.stamp << ", " << std::endl;
-//                                   std::string save_dir = "/dataset/test/vdbfusion/debug_surf";
-//                                   fs::create_directories(save_dir);
-
-//                                   char filename[256];
-//                                   snprintf(filename, sizeof(filename), "%s%s_%.6f.ply",
-//                                            save_dir.c_str(), cam_key.c_str(), lidar_time);
-
-//                                   pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_out(new pcl::PointCloud<pcl::PointXYZRGB>());
-//                                   cloud_out->points.assign(out.begin(), out.end());
-//                                   cloud_out->width = cloud_out->points.size();
-//                                   cloud_out->height = 1;
-//                                   cloud_out->is_dense = false;
-
-//                                   pcl::io::savePLYFileBinary(filename, *cloud_out);
-//                                   ROS_INFO("[save] %s: saved %zu surf points -> %s", cam_key.c_str(), out.size(), filename);
-//                               }
-// #endif
-
-                              surf_accum->points.insert(surf_accum->points.end(), out.begin(), out.end());
-                          }
-
-                          // ------- raw -------
-                          {
-                              color_point_cloud::PointCloudConst cloud_good{msgIn->cloud_good};
-                              std::vector<color_point_cloud::Point> pts;
-                              pts.reserve(cloud_good.getPointCount());
-                              for (size_t i = 0; i < cloud_good.getPointCount(); ++i)
-                              {
-                                  pts.emplace_back(cloud_good.getCurrentPoint());
-                                  cloud_good.nextPoint();
-                              }
-
-                              std::vector<pcl::PointXYZRGB> out;
-                              out.reserve(pts.size());
-#pragma omp parallel
-                                  {
-                                      std::vector<pcl::PointXYZRGB> local;
-                                      local.reserve(Horizon_SCAN);
-
-#pragma omp for nowait
-                                      for (int i = 0; i < static_cast<int>(pts.size()); ++i)
-                                      {
-                                          const auto &p = pts[i];
-                                        //   double dist = std::sqrt(p.x * p.x + p.y * p.y + p.z * p.z);
-                                        //   if (dist > 40.0)
-                                        //       continue;
-                                          Eigen::Vector4d p4(p.x, p.y, p.z, 1.0);
-                                          Eigen::Vector3d pc = P * p4;
-                                          const double z = pc[2];
-                                          if (z <= 1e-6)
-                                              continue;
-
-                                          const int xi = static_cast<int>(std::round(pc[0] / z));
-                                          const int yi = static_cast<int>(std::round(pc[1] / z));
-                                          if (xi < 0 || yi < 0 || xi >= W || yi >= H)
-                                              continue;
-
-                                          if (cam_key == "/camera_3/")
-                                              if (yi >= mask_y0 && xi >= mask_x0 && xi < mask_x1)
-                                                  continue;
-
-                                          const cv::Vec3b c = image.at<cv::Vec3b>(yi, xi);
-                                          pcl::PointXYZRGB q;
-                                          q.x = p.x;
-                                          q.y = p.y;
-                                          q.z = p.z;
-                                          q.r = c[2];
-                                          q.g = c[1];
-                                          q.b = c[0];
-                                          local.push_back(q);
-                                      }
-
-#pragma omp critical
-                                      out.insert(out.end(), local.begin(), local.end());
-                                  }
-
-#if ENABLE_DEBUG_EACH_CAM_PCD_SAVE
-                                  {
-                                      std::cout << cam_key << " : " << img_msg->header.stamp << ", " << std::endl;
-                                      std::string save_dir = "/dataset/test/vdbfusion/debug";
-                                      fs::create_directories(save_dir);
-
-                                      char filename[256];
-                                      snprintf(filename, sizeof(filename), "%s%s%d.ply",
-                                               save_dir.c_str(), cam_key.c_str(), frameidx);
-
-                                      pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_out(new pcl::PointCloud<pcl::PointXYZRGB>());
-                                      cloud_out->points.assign(out.begin(), out.end());
-                                      cloud_out->width = cloud_out->points.size();
-                                      cloud_out->height = 1;
-                                      cloud_out->is_dense = false;
-
-                                      pcl::io::savePLYFileBinary(filename, *cloud_out);
-                                    //   ROS_INFO("[save] %s: saved %zu raw points -> %s", cam_key.c_str(), out.size(), filename);
-                                  }
-#endif
-
-                              raw_accum->points.insert(raw_accum->points.end(), out.begin(), out.end());
-                          }
+//                               raw_accum->points.insert(raw_accum->points.end(), out.begin(), out.end());
+//                           }
 
                           
-                      });
+                      }
+                    );
         frameidx++;
 
         if (corner_accum->points.empty() || surf_accum->points.empty())

@@ -50,7 +50,10 @@ public:
         }
 
         try {
-            cv::fisheye::undistortImage(cv_ptr->image, cv_image_, get_camera_matrix_cv(), get_distortion_matrix_cv());
+            // cv::fisheye::undistortImage(cv_ptr->image, cv_image_, get_camera_matrix_cv(), get_distortion_matrix_cv());
+            cv::Mat undistorted;
+            cv::remap(cv_ptr->image, undistorted, map1, map2, cv::INTER_LINEAR, cv::BORDER_CONSTANT);
+            cv_image_ = undistorted;
         } catch (const std::exception& e) {
             ROS_WARN_STREAM("Undistort exception: " << e.what());
         }
@@ -317,6 +320,79 @@ public:
         return out;
     }
 
+    void raw_push_keep_all(const sensor_msgs::ImagePtr &img)
+    {
+        std::lock_guard<std::mutex> lk(buf_mtx_);
+        image_buffer_.push_back(img);
+    }
+
+    size_t raw_buf_size() const
+    {
+        std::lock_guard<std::mutex> lk(buf_mtx_);
+        return image_buffer_.size();
+    }
+
+    sensor_msgs::ImageConstPtr raw_buf_front() const
+    {
+        std::lock_guard<std::mutex> lk(buf_mtx_);
+        if (image_buffer_.empty())
+            return nullptr;
+        return image_buffer_.front();
+    }
+
+    sensor_msgs::ImageConstPtr raw_buf_back() const
+    {
+        std::lock_guard<std::mutex> lk(buf_mtx_);
+        if (image_buffer_.empty())
+            return nullptr;
+        return image_buffer_.back();
+    }
+
+    double raw_buf_front_time() const
+    {
+        auto m = raw_buf_front();
+        return m ? m->header.stamp.toSec()
+                 : std::numeric_limits<double>::quiet_NaN();
+    }
+
+    double raw_buf_back_time() const
+    {
+        auto m = raw_buf_back();
+        return m ? m->header.stamp.toSec()
+                 : std::numeric_limits<double>::quiet_NaN();
+    }
+
+    sensor_msgs::ImageConstPtr raw_buf_at(size_t i) const
+    {
+        std::lock_guard<std::mutex> lk(buf_mtx_);
+        if (i >= image_buffer_.size())
+            return nullptr;
+        return image_buffer_[i];
+    }
+
+    void raw_erase_front_n(size_t n)
+    {
+        std::lock_guard<std::mutex> lk(buf_mtx_);
+        if (n >= image_buffer_.size())
+        {
+            image_buffer_.clear();
+            return;
+        }
+        image_buffer_.erase(
+            image_buffer_.begin(),
+            image_buffer_.begin() + static_cast<long>(n));
+    }
+
+    sensor_msgs::ImageConstPtr raw_pop_front_one()
+    {
+        std::lock_guard<std::mutex> lk(buf_mtx_);
+        if (image_buffer_.empty())
+            return nullptr;
+        auto out = image_buffer_.front();
+        image_buffer_.pop_front();
+        return out;
+    }
+
 private:
     std::string image_topic_;
     std::string camera_info_topic_;
@@ -352,6 +428,7 @@ private:
 
     mutable std::mutex buf_mtx_;
     std::deque<sensor_msgs::CompressedImageConstPtr> compressed_buffer_;
+    std::deque<sensor_msgs::ImageConstPtr> image_buffer_;
 
 };
 

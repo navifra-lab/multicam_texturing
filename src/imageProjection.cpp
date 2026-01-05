@@ -392,7 +392,7 @@
         {
             std::lock_guard<std::mutex> lock1(imuLock);
             std::lock_guard<std::mutex> lock2(odoLock);
-
+            
             // make sure IMU data available for the scan
             if (imuQueue1.empty() || imuQueue1.front().header.stamp.toSec() > timeScanCur || imuQueue1.back().header.stamp.toSec() < timeScanEnd)
             {

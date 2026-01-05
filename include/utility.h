@@ -163,6 +163,7 @@ public:
     std::vector<std::string> cameraTopics;
     std::string imageTopicLastName;
     std::string cameraInfoTopicLastName;
+    bool isRaw;
 
     bool  multilidar;
     std::string pointCloudTopic2;
@@ -281,6 +282,7 @@ public:
         nh.param<vector<std::string>>("lio_sam/cameraTopics", cameraTopics, vector<std::string>());
         nh.param<std::string>("lio_sam/imageTopicLastName", imageTopicLastName, "image_raw");
         nh.param<std::string>("lio_sam/cameraInfoTopicLastName", cameraInfoTopicLastName, "camera_info");
+        nh.param<bool>("lio_sam/isRaw", isRaw, true);
 
         usleep(100);
     }
