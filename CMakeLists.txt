@@ -19,6 +19,8 @@ find_package(catkin REQUIRED COMPONENTS
   nav_msgs
   message_generation
   visualization_msgs
+  rosbag
+  rosbag_storage
 )
 
 find_package(OpenMP REQUIRED)
@@ -26,6 +28,9 @@ find_package(PCL REQUIRED QUIET)
 find_package(OpenCV REQUIRED QUIET)
 find_package(GTSAM REQUIRED QUIET)
 find_package(Boost REQUIRED COMPONENTS timer)
+
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GST REQUIRED gstreamer-1.0 gstreamer-app-1.0)
 
 add_message_files(
   DIRECTORY msg
@@ -68,6 +73,7 @@ include_directories(
 	${PCL_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
 	${GTSAM_INCLUDE_DIR}
+  ${GST_INCLUDE_DIRS}
 )
 
 # link directories
@@ -101,3 +107,8 @@ target_link_libraries(${PROJECT_NAME}_mapOptmization Boost::timer ${catkin_LIBRA
 # IMU Preintegration
 add_executable(${PROJECT_NAME}_imuPreintegration src/imuPreintegration.cpp)
 target_link_libraries(${PROJECT_NAME}_imuPreintegration Boost::timer ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} gtsam)
+
+add_executable(${PROJECT_NAME}_h264Bridge src/h264_bridge.cpp)
+add_dependencies(${PROJECT_NAME}_h264Bridge ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
+target_include_directories(${PROJECT_NAME}_h264Bridge PRIVATE ${GST_INCLUDE_DIRS})
+target_link_libraries(${PROJECT_NAME}_h264Bridge ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} ${GST_LIBRARIES})
